@@ -33,7 +33,7 @@
 #   - done: Completed
 
 generated: '2026-08-04T19:12:50-03:00'
-last_updated: '2026-08-10T18:38:10-03:00'
+last_updated: '2026-08-10T19:15:00-03:00'
 project: restaurante
 project_key: NOKEY
 tracking_system: file-system
@@ -52,7 +52,7 @@ development_status:
   epic-3: in-progress
   3-1-validacao-de-token-de-comanda-acesso-sem-login: done
   3-2-navegacao-pelo-cardapio-interativo: done
-  3-3-gestao-de-carrinho-revisao-de-pedido: backlog
+  3-3-gestao-de-carrinho-revisao-de-pedido: done
   3-4-confirmacao-gravacao-do-pedido: backlog
   epic-3-retrospective: optional
   epic-4: backlog

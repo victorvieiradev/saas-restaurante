@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Search, X, Utensils, Plus, Sparkles, Check, AlertCircle, ImageOff, Layers } from 'lucide-react'
 import { fetchCategorias, fetchProdutos } from '../services/menuService'
+import ModalDetalhesProduto from './ModalDetalhesProduto'
 
 export default function CardapioCliente({ restauranteId }) {
   const [categories, setCategories] = useState([])
@@ -8,6 +9,7 @@ export default function CardapioCliente({ restauranteId }) {
   const [loading, setLoading] = useState(true)
   const [selectedCat, setSelectedCat] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedProduct, setSelectedProduct] = useState(null)
 
   useEffect(() => {
     async function loadMenuData() {
@@ -171,10 +173,13 @@ export default function CardapioCliente({ restauranteId }) {
             return (
               <div
                 key={product.id}
+                onClick={() => {
+                  if (!isIndisponivel) setSelectedProduct(product)
+                }}
                 className={`p-4 rounded-2xl bg-slate-900 border transition-all duration-200 flex flex-col justify-between gap-4 group ${
                   isIndisponivel
-                    ? 'border-slate-800/60 opacity-60'
-                    : 'border-slate-800 hover:border-slate-700 hover:shadow-xl hover:shadow-orange-500/5'
+                    ? 'border-slate-800/60 opacity-60 cursor-not-allowed'
+                    : 'border-slate-800 hover:border-orange-500/40 hover:shadow-xl hover:shadow-orange-500/5 cursor-pointer'
                 }`}
               >
                 <div className="flex gap-4">
@@ -229,9 +234,9 @@ export default function CardapioCliente({ restauranteId }) {
 
                       <button
                         disabled={isIndisponivel}
-                        onClick={() => {
-                          // Ação de adicionar ao carrinho (preparado para Story 3.3)
-                          alert(`Prato "${product.nome}" adicionado! (Carrinho será integrado na Story 3.3)`)
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!isIndisponivel) setSelectedProduct(product)
                         }}
                         className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
                           isIndisponivel
@@ -249,6 +254,14 @@ export default function CardapioCliente({ restauranteId }) {
             )
           })}
         </div>
+      )}
+
+      {/* Modal de Detalhes do Produto */}
+      {selectedProduct && (
+        <ModalDetalhesProduto
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+        />
       )}
     </div>
   )
