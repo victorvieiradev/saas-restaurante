@@ -1,0 +1,66 @@
+# generated: 2026-08-04T19:12:50-03:00
+# last_updated: 2026-08-04T19:12:50-03:00
+# project: restaurante
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+generated: '2026-08-04T19:12:50-03:00'
+last_updated: '2026-08-10T18:38:10-03:00'
+project: restaurante
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-setup-do-projeto-frontend-banco-de-dados-supabase: review
+  1-2-autenticacao-de-gestores-multi-tenant: review
+  1-3-gestao-de-categorias-e-produtos-crud-de-cardapio: review
+  epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-geracao-automatica-de-comandas: done
+  2-2-visualizacao-e-impressao-de-qr-codes: done
+  epic-2-retrospective: optional
+  epic-3: in-progress
+  3-1-validacao-de-token-de-comanda-acesso-sem-login: done
+  3-2-navegacao-pelo-cardapio-interativo: done
+  3-3-gestao-de-carrinho-revisao-de-pedido: backlog
+  3-4-confirmacao-gravacao-do-pedido: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  4-1-kanban-kds-dark-mode: backlog
+  4-2-sincronizacao-websockets-em-tempo-real: backlog
+  4-3-transicao-de-status-de-pedido-na-cozinha: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  5-1-busca-e-detalhamento-da-comanda: backlog
+  5-2-fechamento-de-conta-liberacao-de-comanda: backlog
+  epic-5-retrospective: optional
