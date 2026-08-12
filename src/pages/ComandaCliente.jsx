@@ -3,9 +3,72 @@ import { useParams, Link } from 'react-router-dom'
 import { Utensils, QrCode, AlertTriangle, Loader2, Lock, RefreshCw, Store, CheckCircle2, ArrowLeft } from 'lucide-react'
 import { fetchComandaByToken } from '../services/comandaService'
 import CardapioCliente from '../components/CardapioCliente'
-import { CartProvider } from '../context/CartContext'
+import { CartProvider, useCart } from '../context/CartContext'
 import BarraCarrinhoFlutuante from '../components/BarraCarrinhoFlutuante'
 import ModalRevisaoPedido from '../components/ModalRevisaoPedido'
+import ModalSucessoPedido from '../components/ModalSucessoPedido'
+
+function ComandaClienteConteudo({ comandaData, loadComanda }) {
+  const { comanda, restaurante } = comandaData || {}
+  const { lastCreatedOrder, isSuccessOpen, setIsSuccessOpen } = useCart()
+  const isEmUso = comanda?.status === 'EM_USO'
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 pb-24">
+      {/* Cabeçalho Fixo da Comanda / Restaurante */}
+      <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center shrink-0">
+            <Store className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>{restaurante?.nome || 'Restaurante Sabor & Arte'}</span>
+            </h1>
+            <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
+              <span>Atendimento via Cardápio Digital</span>
+              <span>&bull;</span>
+              <span className="text-slate-300 font-medium">Mesa / Comanda</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Badge da Comanda & Status */}
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-lg shadow-md shadow-orange-500/20 flex items-center gap-2">
+            <QrCode className="w-5 h-5 opacity-80" />
+            <span>Comanda #{comanda?.numero || '---'}</span>
+          </div>
+
+          <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 ${
+            isEmUso
+              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          }`}>
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>{isEmUso ? 'Em Atendimento' : 'Disponível'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Componente Interativo do Cardápio Digital (Story 3.2 + Story 3.3) */}
+      <CardapioCliente restauranteId={restaurante?.id || comanda?.restaurante_id} />
+
+      {/* Componentes de Carrinho e Revisão (Story 3.3 + Story 3.4) */}
+      <BarraCarrinhoFlutuante />
+      <ModalRevisaoPedido 
+        restauranteId={restaurante?.id || comanda?.restaurante_id} 
+        comandaId={comanda?.id} 
+        onOrderSent={loadComanda} 
+      />
+      <ModalSucessoPedido 
+        isOpen={isSuccessOpen} 
+        onClose={() => setIsSuccessOpen(false)} 
+        orderData={lastCreatedOrder} 
+      />
+    </div>
+  )
+}
 
 export default function ComandaCliente() {
   const { token } = useParams()
@@ -13,8 +76,8 @@ export default function ComandaCliente() {
   const [error, setError] = useState(null)
   const [comandaData, setComandaData] = useState(null)
 
-  const loadComanda = async () => {
-    setLoading(true)
+  const loadComanda = async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     setError(null)
 
     try {
@@ -29,9 +92,9 @@ export default function ComandaCliente() {
       }
     } catch (err) {
       console.error('Erro ao validar token da comanda:', err)
-      setError('not_found')
+      if (!isBackground) setError('not_found')
     } finally {
-      setLoading(false)
+      if (!isBackground) setLoading(false)
     }
   }
 
@@ -117,55 +180,11 @@ export default function ComandaCliente() {
   }
 
   // Estado de Sucesso (Validação Concluída com Sucesso)
-  const { comanda, restaurante } = comandaData || {}
-  const isEmUso = comanda?.status === 'EM_USO'
+  const { comanda } = comandaData || {}
 
   return (
     <CartProvider comandaId={comanda?.id}>
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 pb-24">
-        {/* Cabeçalho Fixo da Comanda / Restaurante */}
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 flex items-center justify-center shrink-0">
-              <Store className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>{restaurante?.nome || 'Restaurante Sabor & Arte'}</span>
-              </h1>
-              <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                <span>Atendimento via Cardápio Digital</span>
-                <span>&bull;</span>
-                <span className="text-slate-300 font-medium">Mesa / Comanda</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Badge da Comanda & Status */}
-          <div className="flex items-center gap-3">
-            <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-lg shadow-md shadow-orange-500/20 flex items-center gap-2">
-              <QrCode className="w-5 h-5 opacity-80" />
-              <span>Comanda #{comanda?.numero || '---'}</span>
-            </div>
-
-            <div className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 ${
-              isEmUso
-                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-            }`}>
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{isEmUso ? 'Em Atendimento' : 'Disponível'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Componente Interativo do Cardápio Digital (Story 3.2 + Story 3.3) */}
-        <CardapioCliente restauranteId={restaurante?.id || comanda?.restaurante_id} />
-
-        {/* Componentes de Carrinho e Revisão (Story 3.3) */}
-        <BarraCarrinhoFlutuante />
-        <ModalRevisaoPedido />
-      </div>
+      <ComandaClienteConteudo comandaData={comandaData} loadComanda={loadComanda} />
     </CartProvider>
   )
 }

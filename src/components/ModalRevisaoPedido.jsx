@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react'
-import { X, Trash2, Plus, Minus, ShoppingBag, Send, MessageSquare, UtensilsCrossed } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { X, Trash2, Plus, Minus, ShoppingBag, Send, MessageSquare, UtensilsCrossed, Loader2, AlertCircle } from 'lucide-react'
 import { useCart } from '../context/CartContext'
+import { criarPedido } from '../services/pedidoService'
 
-export default function ModalRevisaoPedido() {
+export default function ModalRevisaoPedido({ restauranteId, comandaId, onOrderSent }) {
   const {
     cartItems,
     totalItems,
@@ -13,18 +14,23 @@ export default function ModalRevisaoPedido() {
     updateQuantity,
     clearCart,
     isRevisionOpen,
-    setIsRevisionOpen
+    setIsRevisionOpen,
+    setLastCreatedOrder,
+    setIsSuccessOpen
   } = useCart()
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   // Fechar modal de revisão se todos os itens forem removidos (AC5)
   useEffect(() => {
-    if (isRevisionOpen && cartItems.length === 0) {
+    if (isRevisionOpen && cartItems.length === 0 && !isSubmitting) {
       const timer = setTimeout(() => {
         setIsRevisionOpen(false)
       }, 300)
       return () => clearTimeout(timer)
     }
-  }, [isRevisionOpen, cartItems.length, setIsRevisionOpen])
+  }, [isRevisionOpen, cartItems.length, isSubmitting, setIsRevisionOpen])
 
   if (!isRevisionOpen) return null
 
@@ -32,8 +38,49 @@ export default function ModalRevisaoPedido() {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0)
   }
 
-  const handleSendOrder = () => {
-    alert('Pedido confirmado! Envio para a cozinha será processado na Story 3.4.')
+  const handleSendOrder = async () => {
+    if (!cartItems || cartItems.length === 0 || isSubmitting) return
+
+    setIsSubmitting(true)
+    setSubmitError(null)
+
+    const targetRestauranteId = restauranteId || 'rest-123-demo'
+    const targetComandaId = comandaId || 'cmd-demo-015'
+
+    try {
+      const result = await criarPedido({
+        restauranteId: targetRestauranteId,
+        comandaId: targetComandaId,
+        cartItems,
+        valorTotal: totalAmount,
+        observacaoGeral
+      })
+
+      if (result && result.success) {
+        // Armazenar dados do pedido criado para exibição no modal de sucesso
+        setLastCreatedOrder({
+          pedido: result.pedido,
+          items: result.items
+        })
+
+        // Fechar revisão, limpar carrinho e abrir modal de sucesso
+        setIsRevisionOpen(false)
+        clearCart()
+        setIsSuccessOpen(true)
+
+        // Notificar componente pai (ComandaCliente) para atualizar o status da comanda em background
+        if (onOrderSent) {
+          onOrderSent(true)
+        }
+      } else {
+        setSubmitError('Não foi possível gravar o pedido. Por favor, tente novamente.')
+      }
+    } catch (err) {
+      console.error('Erro ao enviar pedido para a cozinha:', err)
+      setSubmitError('Ocorreu um erro ao conectar com o servidor. Tente novamente.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -57,7 +104,7 @@ export default function ModalRevisaoPedido() {
           </div>
 
           <div className="flex items-center gap-2">
-            {cartItems.length > 0 && (
+            {cartItems.length > 0 && !isSubmitting && (
               <button
                 onClick={clearCart}
                 className="text-xs text-slate-400 hover:text-rose-400 px-2 py-1 transition-colors"
@@ -67,8 +114,9 @@ export default function ModalRevisaoPedido() {
               </button>
             )}
             <button
-              onClick={() => setIsRevisionOpen(false)}
-              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors"
+              onClick={() => !isSubmitting && setIsRevisionOpen(false)}
+              disabled={isSubmitting}
+              className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition-colors disabled:opacity-50"
             >
               <X className="w-5 h-5" />
             </button>
@@ -77,6 +125,14 @@ export default function ModalRevisaoPedido() {
 
         {/* Conteúdo do Carrinho (Scrollable) */}
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar">
+          {/* Alerta de Erro se Houver */}
+          {submitError && (
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
+
           {/* Carrinho Vazio */}
           {cartItems.length === 0 ? (
             <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 space-y-4">
@@ -126,13 +182,15 @@ export default function ModalRevisaoPedido() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="text-sm font-bold text-white truncate">{item.nome}</h4>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-slate-500 hover:text-rose-400 p-1 transition-colors shrink-0"
-                          title="Remover item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isSubmitting && (
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-slate-500 hover:text-rose-400 p-1 transition-colors shrink-0"
+                            title="Remover item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Observação do Item */}
@@ -152,7 +210,8 @@ export default function ModalRevisaoPedido() {
                         <div className="flex items-center gap-2 bg-slate-900 px-2 py-1 rounded-xl border border-slate-800">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantidade - 1)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                            disabled={isSubmitting}
+                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
@@ -161,7 +220,8 @@ export default function ModalRevisaoPedido() {
                           </span>
                           <button
                             onClick={() => updateQuantity(item.id, item.quantidade + 1)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                            disabled={isSubmitting}
+                            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
@@ -181,9 +241,10 @@ export default function ModalRevisaoPedido() {
                 <textarea
                   value={observacaoGeral}
                   onChange={(e) => setObservacaoGeral(e.target.value)}
+                  disabled={isSubmitting}
                   placeholder="Ex: Favor trazer tudo junto, ou servir as bebidas antes..."
                   rows={2}
-                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:border-orange-500 transition-all resize-none"
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 text-xs focus:outline-none focus:border-orange-500 transition-all resize-none disabled:opacity-50"
                 />
               </div>
             </>
@@ -206,10 +267,20 @@ export default function ModalRevisaoPedido() {
 
             <button
               onClick={handleSendOrder}
-              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm shadow-xl shadow-orange-500/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+              disabled={isSubmitting}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-sm shadow-xl shadow-orange-500/25 active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Send className="w-4 h-4" />
-              <span>Enviar Pedido para a Cozinha</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Enviando Pedido para a Cozinha...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Enviar Pedido para a Cozinha</span>
+                </>
+              )}
             </button>
           </div>
         )}

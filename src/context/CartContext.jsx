@@ -19,6 +19,8 @@ export function CartProvider({ children, comandaId }) {
 
   const [observacaoGeral, setObservacaoGeral] = useState('')
   const [isRevisionOpen, setIsRevisionOpen] = useState(false)
+  const [lastCreatedOrder, setLastCreatedOrder] = useState(null)
+  const [isSuccessOpen, setIsSuccessOpen] = useState(false)
 
   // Sincronizar o carrinho quando a chave da comanda (storageKey) muda
   useEffect(() => {
@@ -128,7 +130,11 @@ export function CartProvider({ children, comandaId }) {
         updateQuantity,
         clearCart,
         isRevisionOpen,
-        setIsRevisionOpen
+        setIsRevisionOpen,
+        lastCreatedOrder,
+        setLastCreatedOrder,
+        isSuccessOpen,
+        setIsSuccessOpen
       }}
     >
       {children}
