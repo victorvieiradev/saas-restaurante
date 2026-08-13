@@ -21,7 +21,7 @@ function Navbar() {
           <span>Restaurante<span className="text-orange-500">App</span></span>
         </Link>
         <nav className="flex items-center gap-4 text-sm font-medium">
-          <Link to="/comanda/demo-123" className="text-slate-400 hover:text-orange-400 transition-colors">Cliente</Link>
+          <Link to="/comanda/demo-token-015" className="text-slate-400 hover:text-orange-400 transition-colors">Cliente</Link>
           <Link to="/cozinha" className="text-slate-400 hover:text-amber-400 transition-colors">Cozinha</Link>
           <Link to="/caixa" className="text-slate-400 hover:text-emerald-400 transition-colors">Caixa</Link>
           
@@ -67,7 +67,7 @@ function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         {/* Módulo Cliente */}
-        <Link to="/comanda/demo-123" className="group p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-orange-500/50 hover:bg-slate-800/80 transition-all duration-300 shadow-lg hover:shadow-orange-500/10">
+        <Link to="/comanda/demo-token-015" className="group p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-orange-500/50 hover:bg-slate-800/80 transition-all duration-300 shadow-lg hover:shadow-orange-500/10">
           <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <QrCode className="w-6 h-6" />
           </div>
@@ -160,7 +160,14 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/comanda/:token" element={<ComandaCliente />} />
-            <Route path="/cozinha" element={<CozinhaKDS />} />
+            <Route
+              path="/cozinha"
+              element={
+                <ProtectedRoute>
+                  <CozinhaKDS />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/caixa" element={<CaixaPOS />} />
             <Route
               path="/admin"

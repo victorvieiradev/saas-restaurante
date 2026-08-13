@@ -11,22 +11,27 @@ function getMockPedidos(restauranteId) {
     const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${restauranteId}`)
     let result = raw ? JSON.parse(raw) : []
 
-    // Migração/Mesclagem automática dos pedidos criados sob a chave legado rest-123-demo
-    if (restauranteId === 'demo-restaurante-id') {
-      const rawLegacy = localStorage.getItem(`${STORAGE_KEY_PREFIX}rest-123-demo`)
-      if (rawLegacy) {
-        try {
-          const legacyList = JSON.parse(rawLegacy)
-          if (Array.isArray(legacyList) && legacyList.length > 0) {
-            const existingIds = new Set(result.map(p => p.id))
-            const newFromLegacy = legacyList.filter(p => !existingIds.has(p.id))
-            if (newFromLegacy.length > 0) {
-              result = [...newFromLegacy, ...result]
-              saveMockPedidos(restauranteId, result)
+    // Mesclar automaticamente de chaves legadas/aliases para evitar perda de pedidos em testes locais
+    const aliasKeys = [
+      `${STORAGE_KEY_PREFIX}demo-restaurante-id`,
+      `${STORAGE_KEY_PREFIX}res-demo-001`,
+      `${STORAGE_KEY_PREFIX}rest-123-demo`
+    ]
+    for (const key of aliasKeys) {
+      if (key !== `${STORAGE_KEY_PREFIX}${restauranteId}`) {
+        const rawAlias = localStorage.getItem(key)
+        if (rawAlias) {
+          try {
+            const aliasList = JSON.parse(rawAlias)
+            if (Array.isArray(aliasList) && aliasList.length > 0) {
+              const existingIds = new Set(result.map(p => p.id))
+              const toAdd = aliasList.filter(p => !existingIds.has(p.id))
+              if (toAdd.length > 0) {
+                result = [...result, ...toAdd]
+                saveMockPedidos(restauranteId, result)
+              }
             }
-          }
-        } catch (err) {
-          console.warn('Erro ao mesclar pedidos legado:', err)
+          } catch (e) {}
         }
       }
     }
@@ -54,18 +59,27 @@ function saveMockPedidos(restauranteId, data) {
  * @param {Object} params
  * @param {string} params.restauranteId
  * @param {string} params.comandaId
+ * @param {string} [params.comandaNumero] - Número visível da comanda (ex: '015')
  * @param {Array} params.cartItems - Lista de itens do carrinho [{ produto_id, quantidade, preco, observacao, nome, ... }]
  * @param {number} params.valorTotal - Soma total do pedido
  * @param {string} [params.observacaoGeral] - Observação geral para o pedido/cozinha
  * @returns {Promise<{ success: boolean, pedido: Object, items: Array, isMock: boolean }>}
  */
-export async function criarPedido({ restauranteId, comandaId, cartItems, valorTotal, observacaoGeral }) {
+export async function criarPedido({ restauranteId, comandaId, comandaNumero, cartItems, valorTotal, observacaoGeral }) {
   if (!restauranteId || !comandaId || !cartItems || cartItems.length === 0) {
     throw new Error('Dados incompletos para criação do pedido.')
   }
 
   const timestamp = new Date().toISOString()
-  const numeroPedidoGerado = Math.floor(100 + Math.random() * 900) // Ex: 104, 842
+  
+  // Determinar número da comanda formatado
+  let numComanda = comandaNumero
+  if (!numComanda && comandaId) {
+    const extracted = comandaId.replace(/\D/g, '')
+    if (extracted) numComanda = extracted.padStart(3, '0')
+  }
+  if (!numComanda) numComanda = '015'
+  const comandaNumeroFormatado = String(numComanda).padStart(3, '0')
 
   try {
     // 1. Inserir Pedido no Supabase
@@ -107,7 +121,8 @@ export async function criarPedido({ restauranteId, comandaId, cartItems, valorTo
         success: true,
         pedido: {
           ...pedidoData,
-          numeroDisplay: `#${numeroPedidoGerado}`,
+          comandaNumero: comandaNumeroFormatado,
+          numeroDisplay: `#${comandaNumeroFormatado}`,
           observacaoGeral: observacaoGeral || null
         },
         items: itensData || payloadItens,
@@ -137,7 +152,8 @@ export async function criarPedido({ restauranteId, comandaId, cartItems, valorTo
     id: novoPedidoId,
     restaurante_id: restauranteId,
     comanda_id: comandaId,
-    numeroDisplay: `#${numeroPedidoGerado}`,
+    comandaNumero: comandaNumeroFormatado,
+    numeroDisplay: `#${comandaNumeroFormatado}`,
     status: 'PENDENTE',
     valor_total: valorTotal,
     observacaoGeral: observacaoGeral || null,
@@ -145,11 +161,24 @@ export async function criarPedido({ restauranteId, comandaId, cartItems, valorTo
     itens: mockItems
   }
 
+  // Salvar no bucket do restaurante
   const pedidosExistentes = getMockPedidos(restauranteId)
   saveMockPedidos(restauranteId, [novoPedidoMock, ...pedidosExistentes])
 
+  // Salvar também nas chaves alias para garantia em ambiente local
+  const aliasTarget = (restauranteId === 'res-demo-001') ? 'demo-restaurante-id' : 'res-demo-001'
+  const aliasList = getMockPedidos(aliasTarget)
+  saveMockPedidos(aliasTarget, [novoPedidoMock, ...aliasList])
+
   // Atualizar status da comanda mock no localStorage
   await updateComandaStatus(comandaId, restauranteId, 'EM_USO')
+
+  // Disparar evento de sincronização local para atualizar a Cozinha imediatamente
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('restaurante_pedido_sync', {
+      detail: { restauranteId, pedido: novoPedidoMock }
+    }))
+  }
 
   return {
     success: true,
@@ -388,6 +417,63 @@ export function subscribeToPedidosKDS(restauranteId = 'demo-restaurante-id', { o
     if (onStatusChange) onStatusChange('FALLBACK')
     return () => {}
   }
+}
+
+/**
+ * Atualiza o status de um pedido no Supabase e no fallback local
+ * @param {string} pedidoId - ID do pedido
+ * @param {'PENDENTE'|'EM_PREPARO'|'CONCLUIDO'|'CANCELADO'} novoStatus - Novo status do pedido
+ * @param {string} [restauranteId='demo-restaurante-id'] - ID do restaurante
+ * @returns {Promise<{ success: boolean, pedido?: Object, isMock: boolean }>}
+ */
+export async function atualizarStatusPedido(pedidoId, novoStatus, restauranteId = 'demo-restaurante-id') {
+  if (!pedidoId || !novoStatus) {
+    throw new Error('ID do pedido e novo status são obrigatórios.')
+  }
+
+  const validStatuses = ['PENDENTE', 'EM_PREPARO', 'CONCLUIDO', 'CANCELADO']
+  const upperStatus = novoStatus.toUpperCase()
+  if (!validStatuses.includes(upperStatus)) {
+    throw new Error(`Status inválido: ${novoStatus}. Esperado: ${validStatuses.join(', ')}`)
+  }
+
+  // 1. Tentar atualizar no Supabase
+  try {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .update({ status: upperStatus })
+      .eq('id', pedidoId)
+      .eq('restaurante_id', restauranteId)
+      .select()
+      .single()
+
+    if (!error && data) {
+      // Sincronizar também no fallback local caso exista
+      const localList = getMockPedidos(restauranteId)
+      const index = localList.findIndex(p => p.id === pedidoId)
+      if (index !== -1) {
+        localList[index] = { ...localList[index], status: upperStatus }
+        saveMockPedidos(restauranteId, localList)
+      }
+
+      return { success: true, pedido: data, isMock: false }
+    } else {
+      console.warn('Supabase atualizarStatusPedido falhou. Tentando fallback local:', error?.message)
+    }
+  } catch (err) {
+    console.warn('Exceção ao atualizar status no Supabase. Usando fallback local:', err)
+  }
+
+  // 2. Fallback Local Storage
+  const localList = getMockPedidos(restauranteId)
+  const index = localList.findIndex(p => p.id === pedidoId)
+  if (index !== -1) {
+    localList[index] = { ...localList[index], status: upperStatus }
+    saveMockPedidos(restauranteId, localList)
+    return { success: true, pedido: localList[index], isMock: true }
+  }
+
+  return { success: true, pedido: { id: pedidoId, status: upperStatus }, isMock: true }
 }
 
 

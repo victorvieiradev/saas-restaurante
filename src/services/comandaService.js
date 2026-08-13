@@ -20,13 +20,15 @@ function getMockComandas(restauranteId) {
     console.warn('Erro ao ler mock de comandas:', e)
   }
 
-  // Se não existir nada no localStorage, gerar um lote inicial de 5 comandas para demonstração
+  // Se não existir nada no localStorage, gerar um lote inicial de comandas para demonstração
   const initialMock = [
     { id: 'cmd-1', restaurante_id: restauranteId, numero: '001', qr_code_token: 'cmd_a1b2c3d4e5f6', status: 'DISPONIVEL', sessao_iniciada_em: null },
     { id: 'cmd-2', restaurante_id: restauranteId, numero: '002', qr_code_token: 'cmd_b2c3d4e5f6a1', status: 'EM_USO', sessao_iniciada_em: new Date().toISOString() },
     { id: 'cmd-3', restaurante_id: restauranteId, numero: '003', qr_code_token: 'cmd_c3d4e5f6a1b2', status: 'DISPONIVEL', sessao_iniciada_em: null },
     { id: 'cmd-4', restaurante_id: restauranteId, numero: '004', qr_code_token: 'cmd_d4e5f6a1b2c3', status: 'DISPONIVEL', sessao_iniciada_em: null },
     { id: 'cmd-5', restaurante_id: restauranteId, numero: '005', qr_code_token: 'cmd_e5f6a1b2c3d4', status: 'ENCERRADA', sessao_iniciada_em: null },
+    { id: 'cmd-8', restaurante_id: restauranteId, numero: '008', qr_code_token: 'demo-token-008', status: 'EM_USO', sessao_iniciada_em: new Date().toISOString() },
+    { id: 'cmd-15', restaurante_id: restauranteId, numero: '015', qr_code_token: 'demo-token-015', status: 'DISPONIVEL', sessao_iniciada_em: null },
   ]
   saveMockComandas(restauranteId, initialMock)
   return initialMock
@@ -66,18 +68,19 @@ export async function fetchComandas(restauranteId) {
 }
 
 /**
- * Busca uma comanda pelo seu qr_code_token
- * @param {string} token - O token único da comanda (ex: 'cmd_a1b2c3d4e5f6' ou 'demo-123')
+ * Busca uma comanda pelo seu qr_code_token ou número
+ * @param {string} token - O token único da comanda ou número (ex: 'cmd_a1b2c3d4e5f6', 'demo-token-015', '015')
  * @returns {Promise<{comanda: Object, restaurante: Object}|null>}
  */
 export async function fetchComandaByToken(token) {
   if (!token) return null
 
+  // 1. Tentar buscar no Supabase
   try {
     const { data: comanda, error } = await supabase
       .from('comandas')
       .select('*, restaurantes(*)')
-      .eq('qr_code_token', token)
+      .or(`qr_code_token.eq.${token},numero.eq.${token}`)
       .maybeSingle()
 
     if (!error && comanda) {
@@ -93,32 +96,71 @@ export async function fetchComandaByToken(token) {
     console.warn('Exceção ao buscar comanda no Supabase:', err)
   }
 
-  // Fallback Local
-  const defaultRestauranteId = 'demo-restaurante-id'
-  const mockList = getMockComandas(defaultRestauranteId)
+  // 2. Fallback Local: Identificar restaurante ativo na sessão
+  let activeRestauranteId = 'res-demo-001'
+  try {
+    const sessionRaw = localStorage.getItem('restaurante_gestor_session')
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw)
+      if (parsed?.restaurante?.id) {
+        activeRestauranteId = parsed.restaurante.id
+      }
+    }
+  } catch (e) {}
 
-  // Checar se o token bate com algum mock ou gerar uma comanda mock para qualquer token de teste
-  let foundComanda = mockList.find(c => c.qr_code_token === token)
+  // 3. Procurar em todos os buckets de comandas locais
+  let foundComanda = null
+  let foundRestauranteId = activeRestauranteId
+  const cleanNum = token.replace(/\D/g, '')
 
+  // Vasculhar chaves do localStorage para encontrar a comanda exata
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+      try {
+        const list = JSON.parse(localStorage.getItem(key))
+        if (Array.isArray(list)) {
+          const match = list.find(c => 
+            c.qr_code_token === token || 
+            String(c.numero) === token ||
+            (cleanNum && String(c.numero).padStart(3, '0') === cleanNum.padStart(3, '0')) ||
+            (cleanNum && String(c.numero) === cleanNum)
+          )
+          if (match) {
+            foundComanda = match
+            foundRestauranteId = match.restaurante_id || key.replace(STORAGE_KEY_PREFIX, '')
+            break
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Se não foi encontrada em nenhum bucket existente, criar uma comanda dinâmica
   if (!foundComanda) {
-    // Extrair números do token se existirem (ex: 'cmd-token-001' -> '001')
-    const extractedNum = token.replace(/\D/g, '')
-    const numDisplay = extractedNum ? extractedNum.padStart(3, '0').slice(-3) : '015'
+    const numDisplay = cleanNum ? cleanNum.padStart(3, '0') : '015'
 
     foundComanda = {
       id: `cmd-${token}`,
-      restaurante_id: defaultRestauranteId,
+      restaurante_id: activeRestauranteId,
       numero: numDisplay,
       qr_code_token: token,
       status: 'DISPONIVEL',
       sessao_iniciada_em: null
+    }
+
+    // Persistir no bucket ativo para permitir consultas futuras
+    const currentList = getMockComandas(activeRestauranteId)
+    const exists = currentList.some(c => c.id === foundComanda.id || c.qr_code_token === token)
+    if (!exists) {
+      saveMockComandas(activeRestauranteId, [foundComanda, ...currentList])
     }
   }
 
   return {
     comanda: foundComanda,
     restaurante: {
-      id: foundComanda.restaurante_id,
+      id: foundRestauranteId || activeRestauranteId,
       nome: 'Restaurante Sabor & Arte',
       slug: 'restaurante-sabor-arte'
     }

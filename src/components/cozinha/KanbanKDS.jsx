@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { ChefHat, RefreshCw, Clock, AlertCircle, CheckCircle2, Flame, Layers, Radio, Volume2, VolumeX, Wifi, WifiOff } from 'lucide-react'
 import OrderCardKDS from './OrderCardKDS'
-import { fetchPedidosKDS, subscribeToPedidosKDS } from '../../services/pedidoService'
+import { fetchPedidosKDS, subscribeToPedidosKDS, atualizarStatusPedido } from '../../services/pedidoService'
 import { playNewOrderSound, getSoundPreference, setSoundPreference, unlockAudio } from '../../lib/soundNotification'
 
 export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
@@ -55,6 +55,29 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
     }
   }, [restauranteId])
 
+  // Handler para transição de status (com atualização otimista)
+  const handleStatusChange = async (pedidoId, novoStatus) => {
+    let previousList = []
+    
+    // Atualização otimista imediata na UI
+    setPedidos((current) => {
+      previousList = current
+      return current.map(p => (p.id === pedidoId ? { ...p, status: novoStatus } : p))
+    })
+
+    try {
+      const res = await atualizarStatusPedido(pedidoId, novoStatus, restauranteId)
+      if (!res.success) {
+        throw new Error('Falha ao atualizar status')
+      }
+      setLastUpdated(new Date())
+    } catch (err) {
+      console.error('Erro ao atualizar status do pedido no KDS:', err)
+      // Reverter estado se houver falha
+      setPedidos(previousList)
+    }
+  }
+
   // Efeito principal: carga inicial, polling secundário e inscrição WebSockets Realtime
   useEffect(() => {
     loadKDSData()
@@ -75,7 +98,7 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
       },
       onUpdatePedido: (pedidoAtualizado) => {
         setPedidos((prevPedidos) =>
-          prevPedidos.map((p) => (p.id === pedidoAtualizado.id ? { ...p, ...pedidoAtualizado } : p))
+          prevPedidos.map((p) => (p.id === pedidoAtualizado.id ? { ...p, ...pedidoAtualizado, status: pedidoAtualizado.status || p.status } : p))
         )
         setLastUpdated(new Date())
       },
@@ -93,9 +116,39 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
       loadKDSData(false)
     }, 10000)
 
+    // 3. Listener local para sincronização em tempo real (fallback / mesmo navegador)
+    const handleLocalSync = (e) => {
+      const syncRestauranteId = e.detail?.restauranteId
+      const novoPedido = e.detail?.pedido
+      if (!syncRestauranteId || syncRestauranteId === restauranteId || syncRestauranteId === 'demo-restaurante-id' || restauranteId === 'res-demo-001') {
+        if (novoPedido) {
+          setPedidos((prev) => {
+            const exists = prev.some(p => p.id === novoPedido.id)
+            if (exists) return prev
+            playNewOrderSound()
+            setLastUpdated(new Date())
+            return [novoPedido, ...prev]
+          })
+        } else {
+          loadKDSData(false)
+        }
+      }
+    }
+
+    const handleStorageEvent = (e) => {
+      if (e.key && e.key.startsWith('restaurante_pedidos_')) {
+        loadKDSData(false)
+      }
+    }
+
+    window.addEventListener('restaurante_pedido_sync', handleLocalSync)
+    window.addEventListener('storage', handleStorageEvent)
+
     return () => {
       clearInterval(timer)
       unsubscribe()
+      window.removeEventListener('restaurante_pedido_sync', handleLocalSync)
+      window.removeEventListener('storage', handleStorageEvent)
     }
   }, [restauranteId, loadKDSData])
 
@@ -146,7 +199,7 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
           {/* Botão de Toggle de Alerta Sonoro */}
           <button
             onClick={toggleSound}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
               isAudioEnabled
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
@@ -186,7 +239,7 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
           <button
             onClick={() => loadKDSData(true)}
             disabled={isRefreshing}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors border border-slate-700 flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors border border-slate-700 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             title="Atualizar lista de pedidos"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -219,7 +272,11 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
             <div className="space-y-4">
               {pendentes.length > 0 ? (
                 pendentes.map(pedido => (
-                  <OrderCardKDS key={pedido.id} pedido={pedido} />
+                  <OrderCardKDS 
+                    key={pedido.id} 
+                    pedido={pedido} 
+                    onUpdateStatus={handleStatusChange} 
+                  />
                 ))
               ) : (
                 <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-slate-800/60 text-slate-500 space-y-2">
@@ -245,7 +302,11 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
             <div className="space-y-4">
               {emPreparo.length > 0 ? (
                 emPreparo.map(pedido => (
-                  <OrderCardKDS key={pedido.id} pedido={pedido} />
+                  <OrderCardKDS 
+                    key={pedido.id} 
+                    pedido={pedido} 
+                    onUpdateStatus={handleStatusChange} 
+                  />
                 ))
               ) : (
                 <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-slate-800/60 text-slate-500 space-y-2">
@@ -271,7 +332,11 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
             <div className="space-y-4">
               {concluidos.length > 0 ? (
                 concluidos.map(pedido => (
-                  <OrderCardKDS key={pedido.id} pedido={pedido} />
+                  <OrderCardKDS 
+                    key={pedido.id} 
+                    pedido={pedido} 
+                    onUpdateStatus={handleStatusChange} 
+                  />
                 ))
               ) : (
                 <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-slate-800/60 text-slate-500 space-y-2">

@@ -3,7 +3,7 @@ import { X, Trash2, Plus, Minus, ShoppingBag, Send, MessageSquare, UtensilsCross
 import { useCart } from '../context/CartContext'
 import { criarPedido } from '../services/pedidoService'
 
-export default function ModalRevisaoPedido({ restauranteId, comandaId, onOrderSent }) {
+export default function ModalRevisaoPedido({ restauranteId, comandaId, comandaNumero, onOrderSent }) {
   const {
     cartItems,
     totalItems,
@@ -51,6 +51,7 @@ export default function ModalRevisaoPedido({ restauranteId, comandaId, onOrderSe
       const result = await criarPedido({
         restauranteId: targetRestauranteId,
         comandaId: targetComandaId,
+        comandaNumero: comandaNumero,
         cartItems,
         valorTotal: totalAmount,
         observacaoGeral

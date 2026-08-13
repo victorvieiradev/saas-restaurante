@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Clock, AlertTriangle, Utensils, Receipt, CheckCircle2, Flame } from 'lucide-react'
+import { Clock, AlertTriangle, Utensils, CheckCircle2, Flame, RefreshCw, Undo2 } from 'lucide-react'
 
 /**
  * Calcula o tempo decorrido desde a data fornecida (em minutos e segundos ou formato legível)
@@ -28,8 +28,9 @@ function calculateElapsedTime(dateString) {
   }
 }
 
-export default function OrderCardKDS({ pedido }) {
+export default function OrderCardKDS({ pedido, onUpdateStatus }) {
   const [elapsed, setElapsed] = useState(() => calculateElapsedTime(pedido.criado_em))
+  const [isProcessing, setIsProcessing] = useState(false)
 
   // Efeito para atualizar o cronômetro a cada 5 segundos
   useEffect(() => {
@@ -46,16 +47,28 @@ export default function OrderCardKDS({ pedido }) {
     ? `#${String(pedido.comandaNumero).padStart(3, '0')}` 
     : (pedido.numeroDisplay || `#${String(pedido.comanda_id || '001').slice(-3)}`)
 
+  const currentStatus = pedido.status?.toUpperCase() || 'PENDENTE'
+
+  const handleAction = async (novoStatus) => {
+    if (!onUpdateStatus || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await onUpdateStatus(pedido.id, novoStatus)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   return (
     <div 
       className={`relative flex flex-col justify-between rounded-2xl border transition-all duration-300 shadow-xl overflow-hidden ${
-        elapsed.isLate 
+        elapsed.isLate && currentStatus !== 'CONCLUIDO'
           ? 'bg-slate-900 border-red-500/50 shadow-red-500/10' 
           : 'bg-slate-900 border-slate-800 hover:border-slate-700'
       }`}
     >
       {/* Top Bar / Indicador de Alerta de Atraso */}
-      {elapsed.isLate && (
+      {elapsed.isLate && currentStatus !== 'CONCLUIDO' && (
         <div className="bg-red-500/20 text-red-300 text-xs font-semibold px-4 py-1 flex items-center justify-between border-b border-red-500/30 animate-pulse">
           <span className="flex items-center gap-1.5">
             <Flame className="w-3.5 h-3.5 text-red-400" />
@@ -77,13 +90,15 @@ export default function OrderCardKDS({ pedido }) {
         {/* Stopwatch / Cronômetro */}
         <div 
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold border transition-colors ${
-            elapsed.isLate 
-              ? 'bg-red-500/15 text-red-400 border-red-500/30' 
-              : 'bg-slate-800 text-slate-300 border-slate-700'
+            currentStatus === 'CONCLUIDO'
+              ? 'bg-slate-800 text-emerald-400 border-slate-700'
+              : elapsed.isLate 
+                ? 'bg-red-500/15 text-red-400 border-red-500/30' 
+                : 'bg-slate-800 text-slate-300 border-slate-700'
           }`}
           title="Tempo decorrido desde a criação do pedido"
         >
-          <Clock className={`w-3.5 h-3.5 ${elapsed.isLate ? 'text-red-400 animate-spin-slow' : 'text-slate-400'}`} />
+          <Clock className={`w-3.5 h-3.5 ${elapsed.isLate && currentStatus !== 'CONCLUIDO' ? 'text-red-400 animate-spin-slow' : 'text-slate-400'}`} />
           <span>{elapsed.formatted}</span>
         </div>
       </div>
@@ -127,6 +142,72 @@ export default function OrderCardKDS({ pedido }) {
               <span>Obs. Geral do Pedido:</span>
             </div>
             <p className="italic font-medium">{pedido.observacaoGeral}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Seção de Ações de Transição de Status (Touch Target >= 48px) */}
+      <div className="p-4 pt-2 pb-3 space-y-2">
+        {currentStatus === 'PENDENTE' && (
+          <button
+            onClick={() => handleAction('EM_PREPARO')}
+            disabled={isProcessing}
+            className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            title="Iniciar o preparo do pedido"
+          >
+            {isProcessing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                <span>Iniciando...</span>
+              </>
+            ) : (
+              <>
+                <Flame className="w-5 h-5 text-slate-950" />
+                <span>Iniciar Preparo</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {currentStatus === 'EM_PREPARO' && (
+          <button
+            onClick={() => handleAction('CONCLUIDO')}
+            disabled={isProcessing}
+            className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            title="Marcar pedido como concluído"
+          >
+            {isProcessing ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                <span>Concluindo...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-5 h-5 text-slate-950" />
+                <span>Concluir Pedido</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {currentStatus === 'CONCLUIDO' && (
+          <div className="space-y-1.5">
+            <div className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>✓ Pedido Pronto para Entrega</span>
+            </div>
+            
+            {onUpdateStatus && (
+              <button
+                onClick={() => handleAction('EM_PREPARO')}
+                disabled={isProcessing}
+                className="w-full py-1 text-center text-[11px] text-slate-500 hover:text-slate-400 hover:underline flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
+                title="Desfazer e voltar para em preparo"
+              >
+                <Undo2 className="w-3 h-3" />
+                <span>Voltar para Em Preparo</span>
+              </button>
+            )}
           </div>
         )}
       </div>

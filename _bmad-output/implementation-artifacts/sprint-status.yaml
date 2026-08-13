@@ -33,7 +33,7 @@
 #   - done: Completed
 
 generated: '2026-08-04T19:12:50-03:00'
-last_updated: '2026-08-12T21:15:00-03:00'
+last_updated: '2026-08-13T17:36:00-03:00'
 project: restaurante
 project_key: NOKEY
 tracking_system: file-system
@@ -55,10 +55,10 @@ development_status:
   3-3-gestao-de-carrinho-revisao-de-pedido: done
   3-4-confirmacao-gravacao-do-pedido: done
   epic-3-retrospective: optional
-  epic-4: in-progress
+  epic-4: done
   4-1-kanban-kds-dark-mode: done
   4-2-sincronizacao-websockets-em-tempo-real: done
-  4-3-transicao-de-status-de-pedido-na-cozinha: backlog
+  4-3-transicao-de-status-de-pedido-na-cozinha: done
   epic-4-retrospective: optional
   epic-5: backlog
   5-1-busca-e-detalhamento-da-comanda: backlog

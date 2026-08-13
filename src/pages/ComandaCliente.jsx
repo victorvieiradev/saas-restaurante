@@ -59,6 +59,7 @@ function ComandaClienteConteudo({ comandaData, loadComanda }) {
       <ModalRevisaoPedido 
         restauranteId={restaurante?.id || comanda?.restaurante_id} 
         comandaId={comanda?.id} 
+        comandaNumero={comanda?.numero}
         onOrderSent={loadComanda} 
       />
       <ModalSucessoPedido 
