@@ -94,7 +94,7 @@ export async function fetchComandaByToken(token) {
   }
 
   // Fallback Local
-  const defaultRestauranteId = 'rest-123-demo'
+  const defaultRestauranteId = 'demo-restaurante-id'
   const mockList = getMockComandas(defaultRestauranteId)
 
   // Checar se o token bate com algum mock ou gerar uma comanda mock para qualquer token de teste

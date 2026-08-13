@@ -79,7 +79,7 @@ function getLocalCategories(restauranteId) {
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
-      return parsed.filter(c => c.restaurante_id === restauranteId || !c.restaurante_id || restauranteId === 'rest-123-demo')
+      return parsed.filter(c => c.restaurante_id === restauranteId || !c.restaurante_id || restauranteId === 'demo-restaurante-id' || restauranteId === 'rest-123-demo')
     } catch (e) {
       console.warn('Erro ao ler categorias do localStorage:', e)
     }
@@ -97,7 +97,7 @@ function getLocalProducts(restauranteId) {
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
-      return parsed.filter(p => p.restaurante_id === restauranteId || !p.restaurante_id || restauranteId === 'rest-123-demo')
+      return parsed.filter(p => p.restaurante_id === restauranteId || !p.restaurante_id || restauranteId === 'demo-restaurante-id' || restauranteId === 'rest-123-demo')
     } catch (e) {
       console.warn('Erro ao ler produtos do localStorage:', e)
     }

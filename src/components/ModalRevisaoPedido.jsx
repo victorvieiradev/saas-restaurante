@@ -44,7 +44,7 @@ export default function ModalRevisaoPedido({ restauranteId, comandaId, onOrderSe
     setIsSubmitting(true)
     setSubmitError(null)
 
-    const targetRestauranteId = restauranteId || 'rest-123-demo'
+    const targetRestauranteId = restauranteId || 'demo-restaurante-id'
     const targetComandaId = comandaId || 'cmd-demo-015'
 
     try {

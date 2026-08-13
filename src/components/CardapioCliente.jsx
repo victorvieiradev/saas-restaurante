@@ -15,7 +15,7 @@ export default function CardapioCliente({ restauranteId }) {
     async function loadMenuData() {
       setLoading(true)
       try {
-        const targetRestId = restauranteId || 'rest-123-demo'
+        const targetRestId = restauranteId || 'demo-restaurante-id'
         const [catData, prodData] = await Promise.all([
           fetchCategorias(targetRestId),
           fetchProdutos(targetRestId)

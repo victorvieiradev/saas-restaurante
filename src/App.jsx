@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminDashboard from './pages/AdminDashboard'
 import ComandaCliente from './pages/ComandaCliente'
+import CozinhaKDS from './pages/CozinhaKDS'
 
 // Sub-componente Navbar com detecção de estado de login
 function Navbar() {
@@ -131,21 +132,6 @@ function Home() {
 }
 
 
-
-function CozinhaKDS() {
-  return (
-    <div className="max-w-xl mx-auto p-6 text-center space-y-6">
-      <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto">
-        <ChefHat className="w-8 h-8" />
-      </div>
-      <h2 className="text-2xl font-bold">Módulo Cozinha - KDS</h2>
-      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-300">
-        Rota pronta para o Épico 4 (Kanban KDS Dark Mode & WebSockets).
-      </div>
-      <Link to="/" className="inline-block text-sm text-amber-400 hover:underline">&larr; Voltar para Home</Link>
-    </div>
-  )
-}
 
 function CaixaPOS() {
   return (
