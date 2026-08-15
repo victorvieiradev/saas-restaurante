@@ -2,7 +2,7 @@
 title: "ARCHITECTURE-SPINE.md - Arquitetura Técnica & Invariantes"
 status: "draft"
 created: "2026-08-03"
-updated: "2026-08-03"
+updated: "2026-08-15"
 ---
 
 # ARCHITECTURE-SPINE: Sistema de Cardápio Digital & Comandas QR Code
@@ -20,7 +20,7 @@ updated: "2026-08-03"
 ## 2. Decisões Arquiteturais Invariantes (Architectural Decisions - ADs)
 
 ### AD-1 [ADOPTED]: Multi-Tenant com Isolamento por Row Level Security (RLS)
-- **Binds:** Todas as tabelas do banco de dados (`categorias`, `produtos`, `comandas`, `pedidos`, `itens_pedido`) possuem obrigatoriamente a coluna `restaurante_id (uuid)`.
+- **Binds:** Todas as tabelas do banco de dados (`categorias`, `produtos`, `comandas`, `pedidos`, `itens_pedido`, `usuarios_restaurante`) possuem obrigatoriamente a coluna `restaurante_id (uuid)`.
 - **Prevents:** Vazamento acidental de dados entre estabelecimentos concorrentes.
 - **Rule:** As consultas do Supabase aplicam políticas RLS garantindo que um restaurante autenticado acesse exclusivamente seus próprios registros.
 
@@ -47,6 +47,16 @@ updated: "2026-08-03"
 - **Prevents:** Perda de histórico financeiro ao "limpar" a comanda para o próximo cliente.
 - **Rule:** Ao fechar a conta no Caixa, o sistema atualiza a comanda para `DISPONIVEL` e desvincula os pedidos ativos para uma sessão encerrada (gravando `sessao_fechada_em`), preservando todos os registros de `pedidos` e `itens_pedido` para relatórios de vendas.
 
+### AD-6 [ADOPTED]: Role-Based Access Control (RBAC) & Route Guards Multi-Tenant
+- **Binds:** `AuthContext.jsx`, `ProtectedRoute.jsx` e tabela `usuarios_restaurante`. Papéis permitidos: `GESTOR`, `COZINHA`, `CAIXA`.
+- **Prevents:** Operadores da cozinha ou do caixa acessando áreas administrativas, alterando preços ou visualizando dados de outros restaurantes vizinhos.
+- **Rule:**
+  - `GESTOR`: Acesso irrestrito a `/admin`, `/caixa`, `/cozinha` e gestão de equipe.
+  - `COZINHA`: Acesso restrito a `/cozinha`. Bloqueado de acessar `/admin` ou `/caixa`.
+  - `CAIXA`: Acesso restrito a `/caixa`. Bloqueado de acessar `/admin` ou `/cozinha`.
+  - O `ProtectedRoute` valida a sessão e se o `role` do usuário consta no array `allowedRoles`. Se não autorizado, redireciona o usuário para seu painel de direito.
+  - Todas as chamadas de API injetam obrigatoriamente o `restaurante_id` extraído do perfil autenticado.
+
 ---
 
 ## 3. Diagrama da Arquitetura do Sistema
@@ -55,29 +65,30 @@ updated: "2026-08-03"
 graph TB
     subgraph Client Layer
         C[📱 Celular Cliente Web/PWA]
-        K[👨‍🍳 Monitor Cozinha KDS]
-        X[💰 Terminal Caixa POS]
-        A[⚙️ Painel Admin Gestor]
+        K[👨‍🍳 Monitor Cozinha KDS - Perfil COZINHA]
+        X[💰 Terminal Caixa POS - Perfil CAIXA]
+        A[⚙️ Painel Admin Gestor - Perfil GESTOR]
     end
 
     subgraph Application & Gateway Layer
         V[⚡ React + Vite SPA]
-        R[🔀 Router /comanda, /cozinha, /caixa, /admin]
+        R[🔀 Router & RBAC Route Guards]
     end
 
     subgraph BaaS Services (Supabase)
-        Auth[🔐 Supabase Auth - Gestor]
-        DB[(🗄️ PostgreSQL Database)]
+        Auth[🔐 Supabase Auth & RBAC Profile]
+        DB[(🗄️ PostgreSQL Database - RLS Multi-Tenant)]
         RT[⚡ Realtime Engine - WebSockets]
         Storage[🖼️ Storage - Fotos dos Pratos]
     end
 
     C -->|GET /comanda/:token| R
-    K -->|Subscreve Canal Realtime| RT
-    X -->|Busca por Comanda| DB
-    A -->|Auth & CRUD Menu| Auth
-    A -->|Upload Imagens| Storage
+    K -->|Login COZINHA ➔ /cozinha| R
+    X -->|Login CAIXA ➔ /caixa| R
+    A -->|Login GESTOR ➔ /admin| R
 
+    R --> V
+    V --> Auth
     V --> DB
     RT -->|Push novos pedidos| K
 ```
@@ -87,9 +98,10 @@ graph TB
 ## 4. Esquema de Banco de Dados (PostgreSQL DDL / Types)
 
 ```sql
--- Enum dos Status
+-- Enum dos Status e Perfis
 CREATE TYPE status_comanda AS ENUM ('DISPONIVEL', 'EM_USO', 'ENCERRADA');
 CREATE TYPE status_pedido AS ENUM ('PENDENTE', 'EM_PREPARO', 'CONCLUIDO', 'CANCELADO');
+CREATE TYPE role_usuario AS ENUM ('GESTOR', 'COZINHA', 'CAIXA');
 
 -- Tabela Restaurante
 CREATE TABLE restaurantes (
@@ -97,6 +109,17 @@ CREATE TABLE restaurantes (
     nome VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabela Usuários / Equipe do Restaurante
+CREATE TABLE usuarios_restaurante (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    restaurante_id UUID REFERENCES restaurantes(id) ON DELETE CASCADE,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    nome VARCHAR(255) NOT NULL,
+    role role_usuario NOT NULL DEFAULT 'COZINHA',
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
