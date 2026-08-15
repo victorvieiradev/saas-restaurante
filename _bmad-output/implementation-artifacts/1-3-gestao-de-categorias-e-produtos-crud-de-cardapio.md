@@ -1,6 +1,6 @@
 # Story 1.3: Gestão de Categorias e Produtos (CRUD de Cardápio)
 
-Status: review
+Status: done
 
 ## Story Description
 
@@ -65,6 +65,9 @@ Status: review
 - [x] **Task 5: Validação e Testes de Regressão** (AC: #1, #2, #3, #4)
   - [x] Validar compilação limpa via `npm run build`.
   - [x] Verificar ausência de erros no console do navegador e integridade das demais rotas.
+
+### Review Findings
+- Clean review — all layers passed (Blind Hunter, Edge Case Hunter, Acceptance Auditor). CRUD completo de categorias e produtos validado e operacional.
 
 ---
 
