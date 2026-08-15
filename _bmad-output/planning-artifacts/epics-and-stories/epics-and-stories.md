@@ -13,6 +13,7 @@ updated: "2026-08-03"
 - **Épico 3:** Módulo Cliente - Cardápio Digital QR Code & Pedido Sem Cadastro
 - **Épico 4:** Módulo Cozinha - KDS em Tempo Real (WebSockets)
 - **Épico 5:** Módulo Caixa - POS, Consumo & Fechamento de Comandas
+- **Épico 6:** Gestão de Equipe & Controle de Acesso por Perfil (RBAC Multi-Tenant)
 
 ---
 
@@ -159,3 +160,46 @@ updated: "2026-08-03"
   - [ ] Botão `[ Confirmar Pagamento & Liberar Comanda ]`.
   - [ ] Altera o status da comanda para `DISPONIVEL`.
   - [ ] O histórico de pedidos daquela sessão permanece gravado no banco de dados para relatórios de vendas.
+
+---
+
+## 👥 Épico 6: Gestão de Equipe & Controle de Acesso por Perfil (RBAC Multi-Tenant)
+
+### Story 6.1: Modelagem de Usuários e Autenticação por Perfil (RBAC)
+- **Como** Dono do Restaurante (Gestor),
+- **Quero** que os usuários cadastrados na minha equipe possuam papéis definidos (`GESTOR`, `COZINHA`, `CAIXA`) atrelados ao meu estabelecimento,
+- **Para que** cada colaborador acerte seu contexto operacional no momento da autenticação.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Tabela `usuarios_restaurante` criada no Supabase DDL com os campos: `id`, `restaurante_id (FK)`, `email (UNIQUE)`, `nome`, `role ('GESTOR' | 'COZINHA' | 'CAIXA')`, `ativo (BOOLEAN)` e `criado_em`.
+  - [ ] `AuthContext.jsx` atualizado para carregar o perfil (`role`), nome e `restaurante_id` ativo no login.
+  - [ ] Suporte a credenciais de demonstração rápidas para os 3 perfis no ambiente de teste/mock:
+    - Gestor: `admin@restaurante.com` / `123456`
+    - Cozinha: `cozinha@restaurante.com` / `123456`
+    - Caixa: `caixa@restaurante.com` / `123456`
+  - [ ] Validação de isolamento multi-tenant garantindo que o `restaurante_id` seja injetado em todas as requisições do usuário logado.
+
+### Story 6.2: Gestão de Membros de Equipe no Painel do Gestor (`/admin`)
+- **Como** Dono do Restaurante (Gestor),
+- **Quero** cadastrar, listar, editar e desativar colaboradores da minha equipe na aba "Equipe" do painel administrativo,
+- **Para que** eu controle quem tem acesso ao sistema do meu restaurante.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Nova aba **"Equipe"** no `AdminDashboard.jsx`, visível exclusivamente para usuários com perfil `GESTOR`.
+  - [ ] Tabela com a lista de colaboradores exibindo Nome, E-mail, Papel (`Cozinha` ou `Caixa`), Data de Cadastro, Status (`Ativo` / `Inativo`) e Ações.
+  - [ ] Modal de Cadastro/Edição de Colaborador com os campos: Nome (obrigatório), E-mail (obrigatório), Senha (mínimo 6 caracteres), Papel (select: `Cozinha` ou `Caixa`) e Status Ativo (toggle).
+  - [ ] Botão de alternar status (Ativar/Desativar) com um clique e modal de confirmação para exclusão.
+  - [ ] Persistência integrada com Supabase e sincronização no fallback local.
+
+### Story 6.3: Roteamento Inteligente & Proteção Estrita por Perfil
+- **Como** Sistema / Operador,
+- **Quero** ser redirecionado para a tela correta após o login e ser impedido de acessar áreas não autorizadas,
+- **Para que** a operação seja focada e dados confidenciais do restaurante fiquem protegidos contra acessos indevidos.
+- **Critérios de Aceitação (ACs):**
+  - [ ] `ProtectedRoute.jsx` aprimorado para aceitar a propriedade `allowedRoles` (ex: `['GESTOR', 'COZINHA']`).
+  - [ ] Redirecionamento inteligente pós-login:
+    - Usuário `COZINHA` $\rightarrow$ Redirecionado diretamente para `/cozinha`.
+    - Usuário `CAIXA` $\rightarrow$ Redirecionado diretamente para `/caixa`.
+    - Usuário `GESTOR` $\rightarrow$ Redirecionado para `/admin`.
+  - [ ] Bloqueio estrito de acesso não autorizado: se um usuário da `COZINHA` tentar navegar para `/admin` ou `/caixa`, o sistema impede o acesso e o redireciona com mensagem informativa para seu painel permitido (`/cozinha`).
+  - [ ] Se um usuário do `CAIXA` tentar navegar para `/admin` ou `/cozinha`, o sistema impede o acesso e o redireciona para `/caixa`.
+  - [ ] Navbar e cabeçalhos adaptados para exibir o perfil ativo do usuário e botão de logout rápido.
+  - [ ] Garantia de que todos os filtros de tempo real do KDS e do Caixa filtrem estritamente pelo `restaurante_id` da sessão ativa.
