@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS usuarios_restaurante (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     restaurante_id UUID REFERENCES restaurantes(id) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL UNIQUE,
+    senha VARCHAR(255) DEFAULT '123456',
     nome VARCHAR(255) NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('GESTOR', 'COZINHA', 'CAIXA')),
     ativo BOOLEAN NOT NULL DEFAULT TRUE,

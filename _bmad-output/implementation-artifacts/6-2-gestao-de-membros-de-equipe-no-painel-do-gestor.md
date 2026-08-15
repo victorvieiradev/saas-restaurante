@@ -32,9 +32,10 @@ Status: done
 - [x] Campos do formulário:
   - **Nome Completo** (texto, obrigatório).
   - **E-mail de Acesso** (e-mail, obrigatório, validação de formato e unicidade no restaurante).
+  - **Senha de Acesso** (mínimo 6 dígitos, com toggle de visibilidade e suporte a preservação na edição).
   - **Função / Papel** (seletor: `Cozinha` ou `Caixa`).
   - **Status** (toggle: *Ativo / Inativo*).
-- [x] Validações visuais com mensagens de erro claras em caso de campos vazios ou e-mail inválido.
+- [x] Validações visuais com mensagens de erro claras em caso de campos vazios, e-mail inválido ou senha com menos de 6 caracteres.
 
 ### AC4: Ações Rápidas de Status e Confirmação de Exclusão
 - [x] Alternância instantânea de status (*Ativar / Desativar*) com um clique no botão de status da tabela.

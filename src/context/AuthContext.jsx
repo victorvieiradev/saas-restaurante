@@ -161,34 +161,39 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const authenticateMockUser = (email) => {
+  const authenticateMockUser = async (email, password) => {
     const normalizedEmail = email.toLowerCase().trim()
-    const demoFound = DEMO_USERS.find(u => u.email.toLowerCase() === normalizedEmail)
+    const userFound = await fetchUserProfile(normalizedEmail)
 
-    if (demoFound) {
-      if (!demoFound.ativo) {
+    if (userFound) {
+      if (!userFound.ativo) {
         throw new Error('Acesso desativado. Entre em contato com o gestor do restaurante.')
       }
 
+      const expectedPassword = userFound.senha || '123456'
+      if (password !== expectedPassword) {
+        throw new Error('Senha incorreta. Verifique os dados digitados.')
+      }
+
       const mockUser = {
-        id: demoFound.id,
-        email: demoFound.email,
+        id: userFound.id,
+        email: userFound.email,
         user_metadata: {
-          nome: demoFound.nome,
-          role: demoFound.role,
+          nome: userFound.nome,
+          role: userFound.role,
           nome_restaurante: 'Restaurante Sabor & Arte'
         }
       }
-      const mockSession = { user: mockUser, access_token: `demo-token-${demoFound.role.toLowerCase()}` }
+      const mockSession = { user: mockUser, access_token: `token-${userFound.role.toLowerCase()}-${userFound.id}` }
       const mockRestaurante = {
-        id: demoFound.restaurante_id || 'res-demo-001',
+        id: userFound.restaurante_id || 'res-demo-001',
         nome: 'Restaurante Sabor & Arte',
         email: 'admin@restaurante.com',
         slug: 'sabor-arte'
       }
 
-      saveDemoSession(mockUser, mockSession, mockRestaurante, demoFound)
-      return { data: { user: mockUser, session: mockSession, userProfile: demoFound }, error: null }
+      saveDemoSession(mockUser, mockSession, mockRestaurante, userFound)
+      return { data: { user: mockUser, session: mockSession, userProfile: userFound }, error: null }
     }
     return null
   }
@@ -196,52 +201,36 @@ export function AuthProvider({ children }) {
   const signIn = async (email, password) => {
     const normalizedEmail = email.toLowerCase().trim()
 
-    // 1. Verificação de credenciais de demonstração rápidas
-    if (password === '123456' && (normalizedEmail === 'admin@restaurante.com' || normalizedEmail === 'cozinha@restaurante.com' || normalizedEmail === 'caixa@restaurante.com')) {
-      try {
-        const mockAuth = authenticateMockUser(normalizedEmail)
-        if (mockAuth) return mockAuth
-      } catch (err) {
-        return { data: null, error: err }
-      }
-    }
-
+    // 1. Tenta autenticação nativa do Supabase Auth
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password,
       })
 
-      if (error) {
-        // Tentativa de mock se falhar autenticação remota
-        if (password === '123456') {
-          const mockAuth = authenticateMockUser(normalizedEmail)
-          if (mockAuth) return mockAuth
-        }
-        throw error
-      }
-
-      // Validar se o usuário está ativo no perfil
-      if (data?.user) {
+      if (!error && data?.user) {
+        // Validar se o usuário está ativo no perfil
         const profile = await fetchUserProfile(normalizedEmail)
         if (profile && profile.ativo === false) {
           await supabase.auth.signOut()
           throw new Error('Acesso desativado. Entre em contato com o gestor do restaurante.')
         }
         await fetchRestauranteAndProfile(data.user)
+        return { data, error: null }
       }
+    } catch (authErr) {
+      if (authErr.message?.includes('Acesso desativado')) {
+        return { data: null, error: authErr }
+      }
+    }
 
-      return { data, error: null }
-    } catch (error) {
-      if (password === '123456') {
-        try {
-          const mockAuth = authenticateMockUser(normalizedEmail)
-          if (mockAuth) return mockAuth
-        } catch (err) {
-          return { data: null, error: err }
-        }
-      }
-      return { data: null, error }
+    // 2. Fallback / Mock para colaboradores cadastrados na equipe e perfis de demonstração
+    try {
+      const mockAuth = await authenticateMockUser(normalizedEmail, password)
+      if (mockAuth) return mockAuth
+      return { data: null, error: new Error('Credenciais inválidas ou e-mail/senha incorretos.') }
+    } catch (mockErr) {
+      return { data: null, error: mockErr }
     }
   }
 

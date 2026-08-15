@@ -7,6 +7,7 @@ export const DEMO_USERS = [
     id: 'usr-demo-admin-01',
     restaurante_id: 'res-demo-001',
     email: 'admin@restaurante.com',
+    senha: '123456',
     nome: 'Gestor Administrador',
     role: 'GESTOR',
     ativo: true,
@@ -16,6 +17,7 @@ export const DEMO_USERS = [
     id: 'usr-demo-cozinha-02',
     restaurante_id: 'res-demo-001',
     email: 'cozinha@restaurante.com',
+    senha: '123456',
     nome: 'Pedro Cozinheiro',
     role: 'COZINHA',
     ativo: true,
@@ -25,6 +27,7 @@ export const DEMO_USERS = [
     id: 'usr-demo-caixa-03',
     restaurante_id: 'res-demo-001',
     email: 'caixa@restaurante.com',
+    senha: '123456',
     nome: 'Maria Operadora de Caixa',
     role: 'CAIXA',
     ativo: true,
@@ -87,8 +90,26 @@ export async function fetchUserProfile(email, restauranteId = null) {
 
   // Fallback para mock local
   const currentRestId = restauranteId || 'res-demo-001'
-  const mockList = getMockUsuarios(currentRestId)
-  const found = mockList.find(u => u.email.toLowerCase() === normalizedEmail)
+  let mockList = getMockUsuarios(currentRestId)
+  let found = mockList.find(u => u.email.toLowerCase() === normalizedEmail)
+
+  if (!found && !restauranteId) {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+          const list = JSON.parse(localStorage.getItem(key) || '[]')
+          const candidate = list.find(u => u.email.toLowerCase() === normalizedEmail)
+          if (candidate) {
+            found = candidate
+            break
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao varrer localStorage para perfil:', e)
+    }
+  }
 
   if (found) {
     return found
@@ -132,10 +153,23 @@ export async function saveUsuarioEquipe(usuario, restauranteId = 'res-demo-001')
   const isEditing = Boolean(usuario.id && !usuario.id.startsWith('temp-'))
   const id = isEditing ? usuario.id : `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
+  // Preserva ou define senha
+  let senha = usuario.senha?.trim()
+  if (!senha) {
+    if (isEditing) {
+      const mockList = getMockUsuarios(restauranteId)
+      const existing = mockList.find(u => u.id === id)
+      senha = existing?.senha || '123456'
+    } else {
+      senha = '123456'
+    }
+  }
+
   const payload = {
     id,
     restaurante_id: restauranteId,
     email: usuario.email.trim().toLowerCase(),
+    senha,
     nome: usuario.nome.trim(),
     role: usuario.role || 'COZINHA',
     ativo: usuario.ativo !== undefined ? Boolean(usuario.ativo) : true,

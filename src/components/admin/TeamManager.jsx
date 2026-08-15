@@ -22,7 +22,10 @@ import {
   X,
   Mail,
   User,
-  Power
+  Power,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 
 export default function TeamManager({ restauranteId = 'res-demo-001' }) {
@@ -33,10 +36,12 @@ export default function TeamManager({ restauranteId = 'res-demo-001' }) {
 
   // Modal de Criação / Edição
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [currentUser, setCurrentUser] = useState({
     id: null,
     nome: '',
     email: '',
+    senha: '',
     role: 'COZINHA',
     ativo: true
   })
@@ -104,9 +109,11 @@ export default function TeamManager({ restauranteId = 'res-demo-001' }) {
       id: null,
       nome: '',
       email: '',
+      senha: '',
       role: 'COZINHA',
       ativo: true
     })
+    setShowPassword(false)
     setIsModalOpen(true)
   }
 
@@ -115,14 +122,18 @@ export default function TeamManager({ restauranteId = 'res-demo-001' }) {
       id: user.id,
       nome: user.nome,
       email: user.email,
+      senha: '',
       role: user.role,
       ativo: user.ativo
     })
+    setShowPassword(false)
     setIsModalOpen(true)
   }
 
   const handleSave = async (e) => {
     e.preventDefault()
+
+    const isEditing = Boolean(currentUser.id)
 
     if (!currentUser.nome.trim() || !currentUser.email.trim()) {
       showFeedback('error', 'Por favor, preencha todos os campos obrigatórios.')
@@ -136,13 +147,23 @@ export default function TeamManager({ restauranteId = 'res-demo-001' }) {
       return
     }
 
+    // Validação de senha
+    if (!isEditing && (!currentUser.senha || currentUser.senha.trim().length < 6)) {
+      showFeedback('error', 'Por favor, defina uma senha com no mínimo 6 caracteres.')
+      return
+    }
+
+    if (isEditing && currentUser.senha && currentUser.senha.trim().length < 6) {
+      showFeedback('error', 'A nova senha deve ter no mínimo 6 caracteres.')
+      return
+    }
+
     setSubmitting(true)
     try {
       const { data, error } = await saveUsuarioEquipe(currentUser, restauranteId)
       if (error) {
         showFeedback('error', error.message || 'Erro ao salvar colaborador.')
       } else {
-        const isEditing = Boolean(currentUser.id)
         showFeedback(
           'success',
           isEditing
@@ -569,6 +590,42 @@ export default function TeamManager({ restauranteId = 'res-demo-001' }) {
                 </div>
                 <p className="text-[11px] text-slate-500">
                   Utilizado para autenticação no painel operacional.
+                </p>
+              </div>
+
+              {/* Campo Senha */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Senha de Acesso{' '}
+                  {currentUser.id ? (
+                    <span className="text-[11px] text-slate-500 font-normal lowercase">(deixe em branco para manter)</span>
+                  ) : (
+                    <span className="text-orange-500">*</span>
+                  )}
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required={!currentUser.id}
+                    value={currentUser.senha || ''}
+                    onChange={(e) => setCurrentUser({ ...currentUser, senha: e.target.value })}
+                    placeholder={currentUser.id ? '•••••••• (manter senha atual)' : 'Mínimo de 6 caracteres (ex: 123456)'}
+                    className="w-full pl-10 pr-10 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                    title={showPassword ? 'Ocultar senha' : 'Exibir senha'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {currentUser.id
+                    ? 'Preencha apenas caso deseje redefinir a senha do operador.'
+                    : 'Senha utilizada pelo colaborador para acessar o KDS ou POS (mínimo 6 dígitos).'}
                 </p>
               </div>
 
