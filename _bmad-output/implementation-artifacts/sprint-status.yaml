@@ -67,5 +67,5 @@ development_status:
   epic-6: in-progress
   6-1-modelagem-de-usuarios-e-autenticacao-por-perfil-rbac: done
   6-2-gestao-de-membros-de-equipe-no-painel-do-gestor: done
-  6-3-roteamento-inteligente-e-protecao-estrita-por-perfil: backlog
+  6-3-roteamento-inteligente-e-protecao-estrita-por-perfil: ready-for-dev
   epic-6-retrospective: optional
