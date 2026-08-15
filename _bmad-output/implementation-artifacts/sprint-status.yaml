@@ -42,7 +42,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
   1-1-setup-do-projeto-frontend-banco-de-dados-supabase: done
-  1-2-autenticacao-de-gestores-multi-tenant: review
+  1-2-autenticacao-de-gestores-multi-tenant: done
   1-3-gestao-de-categorias-e-produtos-crud-de-cardapio: review
   epic-1-retrospective: optional
   epic-2: done

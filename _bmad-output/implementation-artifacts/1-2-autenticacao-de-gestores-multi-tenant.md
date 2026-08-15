@@ -1,6 +1,6 @@
 # Story 1.2: Autenticação de Gestores & Multi-Tenant
 
-Status: review
+Status: done
 
 ## Story Description
 
@@ -54,6 +54,9 @@ Status: review
 - [x] **Task 5: Validação e Testes** (AC: #1, #2, #3, #4)
   - [x] Validar compilação limpa via `npm run build`.
   - [x] Garantir ausência de erros no console do navegador e regressões nas demais rotas (`/comanda/:token`, `/cozinha`, `/caixa`).
+
+### Review Findings
+- Clean review — all layers passed (Blind Hunter, Edge Case Hunter, Acceptance Auditor). Nenhum bug, regressão ou violação de critérios identificado.
 
 ---
 
