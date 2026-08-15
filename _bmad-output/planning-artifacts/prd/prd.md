@@ -2,7 +2,7 @@
 title: "PRD - Sistema de Cardápio Digital & Comandas QR Code"
 status: "draft"
 created: "2026-08-03"
-updated: "2026-08-03"
+updated: "2026-08-15"
 ---
 
 # PRD: Sistema de Cardápio Digital & Comandas QR Code
@@ -45,12 +45,25 @@ O **Sistema de Cardápio Digital & Comandas QR Code** é uma plataforma SaaS vol
 4. Ana informa o total ao cliente, recebe o pagamento (Dinheiro/Cartão/Pix) e clica em **Fechar Comanda & Concluir Pagamento**.
 5. O sistema registra o fechamento, zera o consumo da Comanda #015 e altera seu status para **Liberada/Disponível**.
 
-### UJ-4: Roberto (Dono do Restaurante) - Gestão Operacional
-1. Roberto faz login com e-mail e senha no painel administrativo (`app.restaurante.com/admin`).
-2. Roberto cadastra uma nova categoria (*Sobremesas Especialidades*).
-3. Adiciona um novo item (*Petit Gâteau*, R$ 28,00, foto, descrição).
-4. Acessa a aba **Comandas** e solicita "Cadastrar Comandas das mesas 01 a 20".
-5. O sistema gera automaticamente os 20 registros com seus respectivos números e links de QR Code prontos para impressão.
+### UJ-4: João (Dono / Gestor do Restaurante) - Gestão Operacional & Equipe
+1. João faz login com e-mail e senha no painel administrativo (`/admin` ou `/login`).
+2. João acessa a aba **Equipe / Usuários** e cadastra dois colaboradores:
+   - **Pedro:** E-mail `pedro.cozinha@sabor.com`, Perfil **COZINHA**.
+   - **Maria:** E-mail `maria.caixa@sabor.com`, Perfil **CAIXA**.
+3. O sistema cria os acessos atrelados estritamente ao `restaurante_id` do João.
+
+### UJ-5: Pedro (Cozinheiro) - Acesso Operacional Exclusivo ao KDS
+1. Pedro chega para seu turno na cozinha e acessa a tela de login.
+2. Pedro insere suas credenciais (`pedro.cozinha@sabor.com` / senha).
+3. O sistema autentica Pedro, identifica seu papel `COZINHA` e o redireciona automaticamente para o Kanban da Cozinha (`/cozinha`).
+4. Pedro visualiza em tempo real **apenas** os pedidos das comandas do restaurante do João.
+5. Se Pedro tentar digitar manualmente na barra de endereço `/admin` ou `/caixa`, o sistema bloqueia o acesso por restrição de perfil (RBAC) e o mantém seguro no KDS.
+
+### UJ-6: Maria (Operadora de Caixa) - Acesso Operacional Exclusivo ao POS
+1. Maria abre o navegador no terminal do caixa e faz login com suas credenciais (`maria.caixa@sabor.com` / senha).
+2. O sistema detecta o papel `CAIXA` e a redireciona imediatamente para o terminal de checkout (`/caixa`).
+3. Maria busca as comandas abertas, confere extratos e registra pagamentos **exclusivamente** das comandas do restaurante do João.
+4. Se Maria tentar acessar `/admin` ou `/cozinha`, o sistema impede o acesso não autorizado.
 
 ---
 
@@ -85,6 +98,16 @@ O **Sistema de Cardápio Digital & Comandas QR Code** é uma plataforma SaaS vol
 - **FR-405:** Disponibilização de gerador de QR Code individualizado por comanda para salvar/imprimir.
 - **FR-406:** Exibição do link exclusivo do cardápio digital do restaurante (`app.restaurante.com/[slug_restaurante]`).
 
+### 3.5 Módulo de Gestão de Equipe & Controle de Acesso por Perfil (RBAC Multi-Tenant)
+- **FR-501:** O gestor do restaurante deve conseguir cadastrar membros de equipe vinculados ao seu `restaurante_id` (campos: Nome, E-mail, Senha e Papel: `COZINHA` ou `CAIXA`).
+- **FR-502:** O gestor deve ser capaz de listar, editar dados e ativar/desativar o acesso de qualquer usuário da sua equipe.
+- **FR-503:** O sistema de login unificado deve autenticar o usuário e identificar automaticamente seu perfil (`GESTOR`, `COZINHA`, `CAIXA`) e o `restaurante_id` correspondente.
+- **FR-504:** Roteamento e restrições de tela baseados no perfil:
+  - Usuários com perfil `COZINHA` são redirecionados pós-login diretamente para `/cozinha` e bloqueados de acessar `/admin` ou `/caixa`.
+  - Usuários com perfil `CAIXA` são redirecionados pós-login diretamente para `/caixa` e bloqueados de acessar `/admin` ou `/cozinha`.
+  - Usuários com perfil `GESTOR` possuem acesso amplo e irrestrito ao `/admin`, `/caixa`, `/cozinha` e gestão de equipe.
+- **FR-505:** Isolamento de dados multi-tenant estrito: qualquer listagem, consulta ou subscrição em tempo real de pedidos, comandas, produtos e relatórios deve filtrar exclusivamente pelo `restaurante_id` da conta autenticada, sendo estritamente proibido qualquer vazamento ou cruzamento de informações entre diferentes estabelecimentos.
+
 ---
 
 ## 4. Requisitos Não-Funcionais (NFRs)
@@ -94,6 +117,7 @@ O **Sistema de Cardápio Digital & Comandas QR Code** é uma plataforma SaaS vol
 - **NFR-003 (Responsividade):** A interface do cliente deve ser 100% responsiva para telas móveis (320px a 430px de largura). O painel da cozinha deve ser otimizado para monitores Full HD e tablets.
 - **NFR-004 (Disponibilidade):** O sistema deve operar com disponibilidade mínima de 99.9% (SLA de restaurante em operação).
 - **NFR-005 (Segurança):** Impede inserção de pedidos em comandas que estejam com status `Encerrada/Inativa`. Sanitização contra injeções SQL e XSS.
+- **NFR-006 (Isolamento Multi-Tenant & RBAC):** Proibição categórica de vazamento de dados entre tenants. Cada consulta de API, token JWT e canal de WebSocket deve validar o `restaurante_id` antes de expor ou modificar dados.
 
 ---
 
@@ -104,6 +128,7 @@ erDiagram
     RESTAURANTE ||--|{ CATEGORIA : possui
     RESTAURANTE ||--|{ COMANDA : possui
     RESTAURANTE ||--|{ PRODUTO : possui
+    RESTAURANTE ||--|{ USUARIO_RESTAURANTE : possui
     CATEGORIA ||--|{ PRODUTO : contem
     COMANDA ||--|{ PEDIDO : agrupa
     PEDIDO ||--|{ ITEM_PEDIDO : inclui
@@ -115,6 +140,16 @@ erDiagram
         string slug UK
         string email
         string senha_hash
+        datetime criado_em
+    }
+
+    USUARIO_RESTAURANTE {
+        uuid id PK
+        uuid restaurante_id FK
+        string email UK
+        string nome
+        string role "GESTOR | COZINHA | CAIXA"
+        boolean ativo
         datetime criado_em
     }
 
