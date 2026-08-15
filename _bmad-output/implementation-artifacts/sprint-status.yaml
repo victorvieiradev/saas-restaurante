@@ -64,3 +64,8 @@ development_status:
   5-1-busca-e-detalhamento-da-comanda: done
   5-2-fechamento-de-conta-liberacao-de-comanda: done
   epic-5-retrospective: optional
+  epic-6: in-progress
+  6-1-modelagem-de-usuarios-e-autenticacao-por-perfil-rbac: ready-for-dev
+  6-2-gestao-de-membros-de-equipe-no-painel-do-gestor: backlog
+  6-3-roteamento-inteligente-e-protecao-estrita-por-perfil: backlog
+  epic-6-retrospective: optional
