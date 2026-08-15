@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase.js'
 
 // Hash generator de 12 caracteres hexadecimais/alfanuméricos únicos para o qr_code_token
 export function generateToken() {
@@ -296,9 +296,11 @@ export async function updateComandaStatus(id, restauranteId, newStatus) {
     }
 
     // Disparar evento para atualizar views abertas em tempo real
-    window.dispatchEvent(new CustomEvent('restaurante_comanda_status_changed', {
-      detail: { comandaId: id, restauranteId, newStatus }
-    }))
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('restaurante_comanda_status_changed', {
+        detail: { comandaId: id, restauranteId, newStatus }
+      }))
+    }
 
     if (error) {
       console.warn('Erro no Supabase updateComandaStatus. Atualizando mock local:', error.message)
@@ -326,9 +328,11 @@ export async function updateComandaStatus(id, restauranteId, newStatus) {
       }
     }
 
-    window.dispatchEvent(new CustomEvent('restaurante_comanda_status_changed', {
-      detail: { comandaId: id, restauranteId, newStatus }
-    }))
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('restaurante_comanda_status_changed', {
+        detail: { comandaId: id, restauranteId, newStatus }
+      }))
+    }
 
     return true
   }

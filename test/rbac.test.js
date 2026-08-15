@@ -174,6 +174,14 @@ describe('RBAC & Intelligent Routing Unit Tests', () => {
       const caixaBadge = getRoleBadgeInfo(ROLES.CAIXA)
       assert.equal(caixaBadge.color, 'emerald')
       assert.ok(caixaBadge.badgeClass.includes('emerald'))
+
+      const unknownBadge = getRoleBadgeInfo('OUTRO_PAPEL')
+      assert.equal(unknownBadge.color, 'slate')
+      assert.equal(unknownBadge.label, 'OUTRO_PAPEL')
+
+      const nullBadge = getRoleBadgeInfo(null)
+      assert.equal(nullBadge.color, 'slate')
+      assert.equal(nullBadge.label, 'Operador')
     })
   })
 })

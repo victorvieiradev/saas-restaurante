@@ -1,5 +1,5 @@
-import { supabase } from '../lib/supabase'
-import { updateComandaStatus } from './comandaService'
+import { supabase } from '../lib/supabase.js'
+import { updateComandaStatus } from './comandaService.js'
 
 const STORAGE_KEY_PREFIX = 'restaurante_pedidos_'
 

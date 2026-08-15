@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase.js'
 
 const INITIAL_CATEGORIES = [
   { id: 'cat-1', restaurante_id: 'rest-123-demo', nome: 'Pratos Principais', ordem: 1, ativo: true },
@@ -116,7 +116,7 @@ function saveLocalProducts(products) {
 
 export async function fetchCategorias(restauranteId) {
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       const { data, error } = await supabase
         .from('categorias')
         .select('*')
@@ -140,7 +140,7 @@ export async function saveCategoria(categoria, restauranteId) {
   }
 
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       if (categoria.id) {
         const { data, error } = await supabase
           .from('categorias')
@@ -180,7 +180,7 @@ export async function saveCategoria(categoria, restauranteId) {
 
 export async function toggleCategoriaStatus(id, ativo, restauranteId) {
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       const { error } = await supabase
         .from('categorias')
         .update({ ativo })
@@ -201,7 +201,7 @@ export async function toggleCategoriaStatus(id, ativo, restauranteId) {
 
 export async function deleteCategoria(id, restauranteId) {
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       const { error } = await supabase
         .from('categorias')
         .delete()
@@ -226,7 +226,7 @@ export async function deleteCategoria(id, restauranteId) {
 
 export async function fetchProdutos(restauranteId) {
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       const { data, error } = await supabase
         .from('produtos')
         .select('*, categorias(nome)')
@@ -250,7 +250,7 @@ export async function saveProduto(produto, restauranteId) {
   }
 
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       if (produto.id) {
         const { data, error } = await supabase
           .from('produtos')
@@ -290,7 +290,7 @@ export async function saveProduto(produto, restauranteId) {
 
 export async function toggleProdutoDisponibilidade(id, disponivel, restauranteId) {
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       const { error } = await supabase
         .from('produtos')
         .update({ disponivel })
@@ -311,7 +311,7 @@ export async function toggleProdutoDisponibilidade(id, disponivel, restauranteId
 
 export async function deleteProduto(id, restauranteId) {
   try {
-    if (supabase && import.meta.env.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
+    if (supabase && import.meta?.env?.VITE_SUPABASE_URL && !import.meta.env.VITE_SUPABASE_URL.includes('placeholder')) {
       const { error } = await supabase
         .from('produtos')
         .delete()
