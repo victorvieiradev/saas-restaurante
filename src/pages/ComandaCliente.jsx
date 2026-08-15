@@ -101,6 +101,20 @@ export default function ComandaCliente() {
 
   useEffect(() => {
     loadComanda()
+
+    const handleSync = () => {
+      loadComanda(true)
+    }
+
+    window.addEventListener('restaurante_comanda_status_changed', handleSync)
+    window.addEventListener('restaurante_comanda_fechada', handleSync)
+    window.addEventListener('restaurante_pedido_sync', handleSync)
+
+    return () => {
+      window.removeEventListener('restaurante_comanda_status_changed', handleSync)
+      window.removeEventListener('restaurante_comanda_fechada', handleSync)
+      window.removeEventListener('restaurante_pedido_sync', handleSync)
+    }
   }, [token])
 
   // Estado de Carregamento

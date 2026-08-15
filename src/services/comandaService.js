@@ -15,7 +15,24 @@ const STORAGE_KEY_PREFIX = 'restaurante_comandas_'
 function getMockComandas(restauranteId) {
   try {
     const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${restauranteId}`)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        // Auto-correção para comanda 005 caso tenha ficado com status ENCERRADA por herança de mock antigo
+        let modified = false
+        const normalized = parsed.map(c => {
+          if ((c.id === 'cmd-5' || c.numero === '005' || c.qr_code_token === 'cmd_e5f6a1b2c3d4') && c.status === 'ENCERRADA') {
+            modified = true
+            return { ...c, status: 'DISPONIVEL' }
+          }
+          return c
+        })
+        if (modified) {
+          saveMockComandas(restauranteId, normalized)
+        }
+        return normalized
+      }
+    }
   } catch (e) {
     console.warn('Erro ao ler mock de comandas:', e)
   }
@@ -26,7 +43,7 @@ function getMockComandas(restauranteId) {
     { id: 'cmd-2', restaurante_id: restauranteId, numero: '002', qr_code_token: 'cmd_b2c3d4e5f6a1', status: 'EM_USO', sessao_iniciada_em: new Date().toISOString() },
     { id: 'cmd-3', restaurante_id: restauranteId, numero: '003', qr_code_token: 'cmd_c3d4e5f6a1b2', status: 'DISPONIVEL', sessao_iniciada_em: null },
     { id: 'cmd-4', restaurante_id: restauranteId, numero: '004', qr_code_token: 'cmd_d4e5f6a1b2c3', status: 'DISPONIVEL', sessao_iniciada_em: null },
-    { id: 'cmd-5', restaurante_id: restauranteId, numero: '005', qr_code_token: 'cmd_e5f6a1b2c3d4', status: 'ENCERRADA', sessao_iniciada_em: null },
+    { id: 'cmd-5', restaurante_id: restauranteId, numero: '005', qr_code_token: 'cmd_e5f6a1b2c3d4', status: 'DISPONIVEL', sessao_iniciada_em: null },
     { id: 'cmd-8', restaurante_id: restauranteId, numero: '008', qr_code_token: 'demo-token-008', status: 'EM_USO', sessao_iniciada_em: new Date().toISOString() },
     { id: 'cmd-15', restaurante_id: restauranteId, numero: '015', qr_code_token: 'demo-token-015', status: 'DISPONIVEL', sessao_iniciada_em: null },
   ]
@@ -111,31 +128,42 @@ export async function fetchComandaByToken(token) {
     }
   } catch (e) {}
 
-  // 3. Procurar em todos os buckets de comandas locais
+  // 3. Procurar no bucket do restaurante ativo primeiro, depois nos outros
   let foundComanda = null
   let foundRestauranteId = activeRestauranteId
   const cleanNum = token.replace(/\D/g, '')
 
-  // Vasculhar chaves do localStorage para encontrar a comanda exata
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i)
-    if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
-      try {
-        const list = JSON.parse(localStorage.getItem(key))
-        if (Array.isArray(list)) {
-          const match = list.find(c => 
-            c.qr_code_token === token || 
-            String(c.numero) === token ||
-            (cleanNum && String(c.numero).padStart(3, '0') === cleanNum.padStart(3, '0')) ||
-            (cleanNum && String(c.numero) === cleanNum)
-          )
-          if (match) {
-            foundComanda = match
-            foundRestauranteId = match.restaurante_id || key.replace(STORAGE_KEY_PREFIX, '')
-            break
+  const isMatch = (c) => (
+    c.qr_code_token === token || 
+    String(c.numero) === token ||
+    (cleanNum && String(c.numero).padStart(3, '0') === cleanNum.padStart(3, '0')) ||
+    (cleanNum && String(c.numero) === cleanNum)
+  )
+
+  // Tentar primeiro no bucket ativo
+  const activeList = getMockComandas(activeRestauranteId)
+  const activeMatch = activeList.find(isMatch)
+
+  if (activeMatch) {
+    foundComanda = activeMatch
+    foundRestauranteId = activeMatch.restaurante_id || activeRestauranteId
+  } else {
+    // Vasculhar chaves do localStorage caso esteja em outro bucket
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(STORAGE_KEY_PREFIX) && key !== `${STORAGE_KEY_PREFIX}${activeRestauranteId}`) {
+        try {
+          const list = JSON.parse(localStorage.getItem(key))
+          if (Array.isArray(list)) {
+            const match = list.find(isMatch)
+            if (match) {
+              foundComanda = match
+              foundRestauranteId = match.restaurante_id || key.replace(STORAGE_KEY_PREFIX, '')
+              break
+            }
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
     }
   }
 
@@ -248,11 +276,32 @@ export async function updateComandaStatus(id, restauranteId, newStatus) {
       .eq('restaurante_id', restauranteId)
       .select()
 
+    // Atualizar bucket do restaurante ativo
+    const list = getMockComandas(restauranteId)
+    const updated = list.map(item => (item.id === id || item.qr_code_token === id || item.numero === id ? { ...item, status: newStatus } : item))
+    saveMockComandas(restauranteId, updated)
+
+    // Sincronizar em todos os outros buckets locais
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+        try {
+          const bList = JSON.parse(localStorage.getItem(key))
+          if (Array.isArray(bList)) {
+            const bUpdated = bList.map(item => (item.id === id || item.qr_code_token === id || item.numero === id ? { ...item, status: newStatus } : item))
+            localStorage.setItem(key, JSON.stringify(bUpdated))
+          }
+        } catch (e) {}
+      }
+    }
+
+    // Disparar evento para atualizar views abertas em tempo real
+    window.dispatchEvent(new CustomEvent('restaurante_comanda_status_changed', {
+      detail: { comandaId: id, restauranteId, newStatus }
+    }))
+
     if (error) {
-      console.warn('Erro no Supabase updateComandaStatus. Atualizando mock:', error.message)
-      const list = getMockComandas(restauranteId)
-      const updated = list.map(item => item.id === id ? { ...item, status: newStatus } : item)
-      saveMockComandas(restauranteId, updated)
+      console.warn('Erro no Supabase updateComandaStatus. Atualizando mock local:', error.message)
       return true
     }
 
@@ -260,8 +309,27 @@ export async function updateComandaStatus(id, restauranteId, newStatus) {
   } catch (err) {
     console.warn('Exceção em updateComandaStatus:', err)
     const list = getMockComandas(restauranteId)
-    const updated = list.map(item => item.id === id ? { ...item, status: newStatus } : item)
+    const updated = list.map(item => (item.id === id || item.qr_code_token === id || item.numero === id ? { ...item, status: newStatus } : item))
     saveMockComandas(restauranteId, updated)
+
+    // Sincronizar em todos os outros buckets locais
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
+        try {
+          const bList = JSON.parse(localStorage.getItem(key))
+          if (Array.isArray(bList)) {
+            const bUpdated = bList.map(item => (item.id === id || item.qr_code_token === id || item.numero === id ? { ...item, status: newStatus } : item))
+            localStorage.setItem(key, JSON.stringify(bUpdated))
+          }
+        } catch (e) {}
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('restaurante_comanda_status_changed', {
+      detail: { comandaId: id, restauranteId, newStatus }
+    }))
+
     return true
   }
 }
