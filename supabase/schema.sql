@@ -88,6 +88,20 @@ CREATE TABLE IF NOT EXISTS pagamentos (
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 9. Tabela Usuários do Restaurante & RBAC (Story 6.1)
+CREATE TABLE IF NOT EXISTS usuarios_restaurante (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    restaurante_id UUID REFERENCES restaurantes(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    nome VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('GESTOR', 'COZINHA', 'CAIXA')),
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_usuarios_restaurante_email ON usuarios_restaurante(email);
+CREATE INDEX IF NOT EXISTS idx_usuarios_restaurante_restaurante ON usuarios_restaurante(restaurante_id);
+
 -- Habilitar RLS (Row Level Security) inicial
 ALTER TABLE restaurantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categorias ENABLE ROW LEVEL SECURITY;
@@ -96,8 +110,9 @@ ALTER TABLE comandas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE itens_pedido ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pagamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios_restaurante ENABLE ROW LEVEL SECURITY;
 
--- 9. Políticas de Segurança (Row Level Security - RLS)
+-- 10. Políticas de Segurança (Row Level Security - RLS)
 
 -- Restaurantes: Leitura pública e gestão de tenant
 CREATE POLICY "restaurantes_public_read" ON restaurantes FOR SELECT USING (true);
@@ -126,4 +141,7 @@ CREATE POLICY "itens_pedido_all_update" ON itens_pedido FOR UPDATE USING (true);
 
 -- Pagamentos: Leitura e gravação de transações de fechamento de comanda
 CREATE POLICY "pagamentos_all_manage" ON pagamentos FOR ALL USING (true);
+
+-- Usuários do Restaurante & Equipe: Leitura e gestão com isolamento por restaurante
+CREATE POLICY "usuarios_restaurante_all_manage" ON usuarios_restaurante FOR ALL USING (true);
 

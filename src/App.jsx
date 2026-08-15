@@ -10,7 +10,7 @@ import CaixaPOS from './pages/CaixaPOS'
 
 // Sub-componente Navbar com detecção de estado de login
 function Navbar() {
-  const { user } = useAuth()
+  const { user, userProfile, role } = useAuth()
 
   return (
     <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
@@ -33,12 +33,12 @@ function Navbar() {
             {user ? (
               <>
                 <User className="w-4 h-4" />
-                <span>Meu Painel</span>
+                <span>{userProfile?.nome ? userProfile.nome.split(' ')[0] : 'Painel'} {role && `(${role})`}</span>
               </>
             ) : (
               <>
                 <ShieldCheck className="w-4 h-4" />
-                <span>Gestor Login</span>
+                <span>Entrar</span>
               </>
             )}
           </Link>

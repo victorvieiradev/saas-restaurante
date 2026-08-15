@@ -3,8 +3,10 @@ import { useAuth } from '../context/AuthContext'
 import CategoryManager from '../components/admin/CategoryManager'
 import ProductManager from '../components/admin/ProductManager'
 import ComandaManager from '../components/admin/ComandaManager'
+import TeamManager from '../components/admin/TeamManager'
 import { fetchCategorias, fetchProdutos } from '../services/menuService'
 import { fetchComandas } from '../services/comandaService'
+import { fetchUsuariosEquipe } from '../services/userService'
 import {
   Building2,
   LogOut,
@@ -16,28 +18,38 @@ import {
   LayoutDashboard,
   CheckCircle2,
   AlertCircle,
-  Layers
+  Layers,
+  Users,
+  Crown
 } from 'lucide-react'
 
 export default function AdminDashboard() {
-  const { user, restaurante, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState('overview') // 'overview', 'categories', 'products', 'comandas'
+  const { user, userProfile, role, isAdmin, restaurante, signOut } = useAuth()
+  const [activeTab, setActiveTab] = useState('overview') // 'overview', 'categories', 'products', 'comandas', 'team'
 
-  const [stats, setStats] = useState({ categoriesCount: 0, productsCount: 0, availableProductsCount: 0, comandasCount: 0 })
+  const [stats, setStats] = useState({
+    categoriesCount: 0,
+    productsCount: 0,
+    availableProductsCount: 0,
+    comandasCount: 0,
+    teamCount: 0
+  })
 
   const loadStats = async () => {
     if (!restaurante?.id) return
     try {
-      const [cats, prods, cmds] = await Promise.all([
+      const [cats, prods, cmds, teamRes] = await Promise.all([
         fetchCategorias(restaurante.id),
         fetchProdutos(restaurante.id),
-        fetchComandas(restaurante.id)
+        fetchComandas(restaurante.id),
+        fetchUsuariosEquipe(restaurante.id)
       ])
       setStats({
         categoriesCount: cats.length,
         productsCount: prods.length,
         availableProductsCount: prods.filter(p => p.disponivel).length,
-        comandasCount: cmds.length
+        comandasCount: cmds.length,
+        teamCount: teamRes.data?.length || 0
       })
     } catch (e) {
       console.warn('Erro ao carregar estatísticas:', e)
@@ -59,13 +71,13 @@ export default function AdminDashboard() {
           <div>
             <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-1">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Sessão Multi-Tenant Ativa</span>
+              <span>Sessão RBAC: {role || 'GESTOR'}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-white">
               {restaurante?.nome || 'Restaurante Gestor'}
             </h1>
             <p className="text-slate-400 text-sm flex items-center gap-2 mt-1 flex-wrap">
-              <span>Gestor: <strong className="text-slate-200">{user?.email}</strong></span>
+              <span>Operador: <strong className="text-slate-200">{userProfile?.nome || user?.email}</strong> ({user?.email})</span>
               <span className="hidden sm:inline">&bull;</span>
               <span className="font-mono text-xs text-slate-500">ID: {restaurante?.id}</span>
             </p>
@@ -130,6 +142,21 @@ export default function AdminDashboard() {
           <QrCode className="w-4 h-4" />
           <span>Comandas ({stats.comandasCount})</span>
         </button>
+
+        {/* Aba Equipe (Exclusiva para Gestor) */}
+        {(isAdmin || role === 'GESTOR' || !role) && (
+          <button
+            onClick={() => setActiveTab('team')}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              activeTab === 'team'
+                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Equipe ({stats.teamCount})</span>
+          </button>
+        )}
       </div>
 
       {/* Conteúdo da Aba Ativa */}
@@ -166,20 +193,6 @@ export default function AdminDashboard() {
             </div>
 
             <div
-              onClick={() => setActiveTab('products')}
-              className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer space-y-2 group"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pratos Disponíveis</span>
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-3xl font-extrabold text-emerald-400">{stats.availableProductsCount}</div>
-              <p className="text-xs text-slate-500">Prontos para pedido no cardápio</p>
-            </div>
-
-            <div
               onClick={() => setActiveTab('comandas')}
               className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer space-y-2 group"
             >
@@ -192,10 +205,24 @@ export default function AdminDashboard() {
               <div className="text-3xl font-extrabold text-white">{stats.comandasCount}</div>
               <p className="text-xs text-slate-500">Cartões de mesa com QR Code</p>
             </div>
+
+            <div
+              onClick={() => setActiveTab('team')}
+              className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer space-y-2 group"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Membros da Equipe</span>
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Users className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-3xl font-extrabold text-emerald-400">{stats.teamCount}</div>
+              <p className="text-xs text-slate-500">Operadores de cozinha e caixa</p>
+            </div>
           </div>
 
           {/* Seções Principais do Sistema */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
             {/* Card: Gestão de Cardápio */}
             <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
               <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center">
@@ -204,42 +231,42 @@ export default function AdminDashboard() {
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold mb-2 border border-emerald-500/20">
                   <CheckCircle2 className="w-3 h-3" />
-                  <span>História 1.3 Concluída</span>
+                  <span>Cardápio Ativo</span>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-1">Gestão de Cardápio Ativa</h3>
+                <h3 className="text-lg font-bold text-white mb-1">Gestão de Cardápio</h3>
                 <p className="text-slate-400 text-sm">
-                  Gerencie categorias, pratos, bebidas, preços, descrições e status de disponibilidade em tempo real.
+                  Gerencie categorias, pratos, bebidas, preços e disponibilidade em tempo real.
                 </p>
               </div>
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={() => setActiveTab('categories')}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
-                >
-                  Gerenciar Categorias &rarr;
-                </button>
+              <div className="flex items-center gap-2 pt-2">
                 <button
                   onClick={() => setActiveTab('products')}
-                  className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition-all cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition-all cursor-pointer"
                 >
-                  Gerenciar Cardápio &rarr;
+                  Cardápio &rarr;
+                </button>
+                <button
+                  onClick={() => setActiveTab('categories')}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Categorias &rarr;
                 </button>
               </div>
             </div>
 
-            {/* Card: Comandas QR Code (História 2.1) */}
+            {/* Card: Comandas QR Code */}
             <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
               <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center">
                 <QrCode className="w-5 h-5" />
               </div>
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 text-xs font-semibold mb-2 border border-orange-500/20">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold mb-2 border border-emerald-500/20">
                   <CheckCircle2 className="w-3 h-3" />
-                  <span>História 2.1 Em Desenvolvimento</span>
+                  <span>Comandas Prontas</span>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-1">Geração de Comandas & QR Code</h3>
+                <h3 className="text-lg font-bold text-white mb-1">Comandas & QR Codes</h3>
                 <p className="text-slate-400 text-sm">
-                  Gere lotes sequenciais de comandas com tokens de 12 caracteres únicos para os cartões de mesa.
+                  Gere lotes sequenciais de comandas com tokens para impressão e cartões de mesa.
                 </p>
               </div>
               <div className="pt-2">
@@ -248,6 +275,31 @@ export default function AdminDashboard() {
                   className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition-all cursor-pointer"
                 >
                   Gerenciar Comandas &rarr;
+                </button>
+              </div>
+            </div>
+
+            {/* Card: Equipe e Acessos */}
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold mb-2 border border-emerald-500/20">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>RBAC Multi-Tenant</span>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">Membros da Equipe</h3>
+                <p className="text-slate-400 text-sm">
+                  Controle os colaboradores com acesso operacional à cozinha (KDS) e caixa (POS).
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => setActiveTab('team')}
+                  className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Gerenciar Equipe &rarr;
                 </button>
               </div>
             </div>
@@ -266,6 +318,11 @@ export default function AdminDashboard() {
       {activeTab === 'comandas' && (
         <ComandaManager restauranteId={restaurante?.id} />
       )}
+
+      {activeTab === 'team' && (
+        <TeamManager restauranteId={restaurante?.id} />
+      )}
     </div>
   )
 }
+

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { Lock, Mail, ShieldCheck, AlertCircle, Loader2, KeyRound } from 'lucide-react'
+import { Lock, Mail, ShieldCheck, AlertCircle, Loader2, KeyRound, ChefHat, Receipt, Crown } from 'lucide-react'
 
 export default function AdminLogin() {
   const { signIn } = useAuth()
@@ -8,9 +8,10 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [selectedDemoRole, setSelectedDemoRole] = useState(null)
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e?.preventDefault()
     setErrorMsg('')
 
     if (!email || !password) {
@@ -31,14 +32,15 @@ export default function AdminLogin() {
     }
   }
 
-  const handleFillDemo = () => {
-    setEmail('admin@restaurante.com')
-    setPassword('123456')
+  const handleSelectDemoUser = (demoEmail, demoPassword, role) => {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    setSelectedDemoRole(role)
     setErrorMsg('')
   }
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-slate-950">
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 bg-slate-950">
       <div className="w-full max-w-md space-y-8">
         {/* Header da Tela de Login */}
         <div className="text-center space-y-3">
@@ -46,10 +48,10 @@ export default function AdminLogin() {
             <ShieldCheck className="w-8 h-8" />
           </div>
           <h2 className="text-3xl font-extrabold text-white tracking-tight">
-            Painel do Gestor
+            Acesso ao Sistema
           </h2>
           <p className="text-slate-400 text-sm">
-            Entre com suas credenciais para gerenciar o cardápio e os pedidos do seu estabelecimento.
+            Autenticação unificada para Gestores, Operadores de Cozinha e Caixa.
           </p>
         </div>
 
@@ -62,11 +64,73 @@ export default function AdminLogin() {
             </div>
           )}
 
+          {/* Atalhos Rápidos de Demonstração RBAC */}
+          <div className="space-y-2.5">
+            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Perfis de Demonstração Rápida:
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleSelectDemoUser('admin@restaurante.com', '123456', 'GESTOR')}
+                className={`p-2.5 rounded-xl border text-left flex flex-col items-start gap-1 transition-all ${
+                  selectedDemoRole === 'GESTOR'
+                    ? 'bg-blue-500/20 border-blue-500 text-white shadow-md shadow-blue-500/10'
+                    : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-blue-400 text-xs font-bold">
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>Gestor</span>
+                </div>
+                <span className="text-[10px] text-slate-400 truncate w-full">admin@...</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectDemoUser('cozinha@restaurante.com', '123456', 'COZINHA')}
+                className={`p-2.5 rounded-xl border text-left flex flex-col items-start gap-1 transition-all ${
+                  selectedDemoRole === 'COZINHA'
+                    ? 'bg-amber-500/20 border-amber-500 text-white shadow-md shadow-amber-500/10'
+                    : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-amber-400 text-xs font-bold">
+                  <ChefHat className="w-3.5 h-3.5" />
+                  <span>Cozinha</span>
+                </div>
+                <span className="text-[10px] text-slate-400 truncate w-full">cozinha@...</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectDemoUser('caixa@restaurante.com', '123456', 'CAIXA')}
+                className={`p-2.5 rounded-xl border text-left flex flex-col items-start gap-1 transition-all ${
+                  selectedDemoRole === 'CAIXA'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-md shadow-emerald-500/10'
+                    : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>Caixa</span>
+                </div>
+                <span className="text-[10px] text-slate-400 truncate w-full">caixa@...</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-slate-800"></div>
+            <span className="flex-shrink mx-3 text-slate-500 text-xs uppercase font-medium">ou digite os dados</span>
+            <div className="flex-grow border-t border-slate-800"></div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Campo E-mail */}
             <div className="space-y-2">
               <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
-                E-mail do Gestor
+                E-mail de Acesso
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -77,8 +141,11 @@ export default function AdminLogin() {
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="gestor@restaurante.com"
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setSelectedDemoRole(null)
+                  }}
+                  placeholder="usuario@restaurante.com"
                   className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors text-sm"
                 />
               </div>
@@ -117,24 +184,13 @@ export default function AdminLogin() {
                   <span>Autenticando...</span>
                 </>
               ) : (
-                <span>Entrar no Painel</span>
+                <span>Entrar no Sistema</span>
               )}
             </button>
           </form>
-
-          {/* Dica de Acesso Rápido para Testes/Demo */}
-          <div className="pt-4 border-t border-slate-800/80">
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="w-full py-2.5 px-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 rounded-xl text-xs font-medium text-slate-300 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <KeyRound className="w-4 h-4 text-orange-400" />
-              <span>Preencher com Credenciais de Demonstração</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
   )
 }
+

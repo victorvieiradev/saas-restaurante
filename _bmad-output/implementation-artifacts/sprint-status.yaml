@@ -33,7 +33,7 @@
 #   - done: Completed
 
 generated: '2026-08-04T19:12:50-03:00'
-last_updated: '2026-08-15T10:19:30-03:00'
+last_updated: '2026-08-15T12:08:00-03:00'
 project: restaurante
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
   5-2-fechamento-de-conta-liberacao-de-comanda: done
   epic-5-retrospective: optional
   epic-6: in-progress
-  6-1-modelagem-de-usuarios-e-autenticacao-por-perfil-rbac: ready-for-dev
-  6-2-gestao-de-membros-de-equipe-no-painel-do-gestor: backlog
+  6-1-modelagem-de-usuarios-e-autenticacao-por-perfil-rbac: done
+  6-2-gestao-de-membros-de-equipe-no-painel-do-gestor: done
   6-3-roteamento-inteligente-e-protecao-estrita-por-perfil: backlog
   epic-6-retrospective: optional
