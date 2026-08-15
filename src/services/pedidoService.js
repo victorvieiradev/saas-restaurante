@@ -9,34 +9,7 @@ const STORAGE_KEY_PREFIX = 'restaurante_pedidos_'
 function getMockPedidos(restauranteId) {
   try {
     const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${restauranteId}`)
-    let result = raw ? JSON.parse(raw) : []
-
-    // Mesclar automaticamente de chaves legadas/aliases para evitar perda de pedidos em testes locais
-    const aliasKeys = [
-      `${STORAGE_KEY_PREFIX}demo-restaurante-id`,
-      `${STORAGE_KEY_PREFIX}res-demo-001`,
-      `${STORAGE_KEY_PREFIX}rest-123-demo`
-    ]
-    for (const key of aliasKeys) {
-      if (key !== `${STORAGE_KEY_PREFIX}${restauranteId}`) {
-        const rawAlias = localStorage.getItem(key)
-        if (rawAlias) {
-          try {
-            const aliasList = JSON.parse(rawAlias)
-            if (Array.isArray(aliasList) && aliasList.length > 0) {
-              const existingIds = new Set(result.map(p => p.id))
-              const toAdd = aliasList.filter(p => !existingIds.has(p.id))
-              if (toAdd.length > 0) {
-                result = [...result, ...toAdd]
-                saveMockPedidos(restauranteId, result)
-              }
-            }
-          } catch (e) {}
-        }
-      }
-    }
-
-    return result
+    return raw ? JSON.parse(raw) : []
   } catch (e) {
     console.warn('Erro ao ler mock de pedidos:', e)
   }
@@ -165,15 +138,10 @@ export async function criarPedido({ restauranteId, comandaId, comandaNumero, car
   const pedidosExistentes = getMockPedidos(restauranteId)
   saveMockPedidos(restauranteId, [novoPedidoMock, ...pedidosExistentes])
 
-  // Salvar também nas chaves alias para garantia em ambiente local
-  const aliasTarget = (restauranteId === 'res-demo-001') ? 'demo-restaurante-id' : 'res-demo-001'
-  const aliasList = getMockPedidos(aliasTarget)
-  saveMockPedidos(aliasTarget, [novoPedidoMock, ...aliasList])
-
   // Atualizar status da comanda mock no localStorage
   await updateComandaStatus(comandaId, restauranteId, 'EM_USO')
 
-  // Disparar evento de sincronização local para atualizar a Cozinha imediatamente
+  // Disparar evento de sincronização local para atualizar Cozinha e Caixa imediatamente
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('restaurante_pedido_sync', {
       detail: { restauranteId, pedido: novoPedidoMock }
@@ -189,29 +157,145 @@ export async function criarPedido({ restauranteId, comandaId, comandaNumero, car
 }
 
 /**
- * Busca todos os pedidos atrelados a uma comanda específica
+ * Busca todos os pedidos atrelados a uma comanda específica formatados com itens para o Caixa POS
+ * @param {string} comandaId - ID da comanda
+ * @param {string} restauranteId - ID do restaurante
+ * @param {string} [comandaNumero] - Número opcional da comanda (ex: '015')
+ * @param {Object} [options]
+ * @param {boolean} [options.apenasAbertos=true] - Se deve trazer apenas pedidos da sessão atual em aberto
+ * @returns {Promise<Array>} Lista normalizada de pedidos com itens
  */
-export async function fetchPedidosComanda(comandaId, restauranteId) {
-  if (!comandaId) return []
+export async function fetchPedidosComanda(comandaId, restauranteId = 'demo-restaurante-id', comandaNumero = null, { apenasAbertos = true } = {}) {
+  if (!comandaId && !comandaNumero) return []
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('pedidos')
-      .select('*, itens_pedido(*, produtos(*))')
-      .eq('comanda_id', comandaId)
-      .order('criado_em', { ascending: false })
+      .select(`
+        *,
+        itens_pedido (
+          id,
+          quantidade,
+          preco_unitario,
+          observacao,
+          produtos (
+            id,
+            nome,
+            imagem_url,
+            preco
+          )
+        )
+      `)
+      .order('criado_em', { ascending: true })
 
-    if (!error && data) {
-      return data
+    if (restauranteId) {
+      query = query.eq('restaurante_id', restauranteId)
+    }
+
+    if (comandaId) {
+      query = query.eq('comanda_id', comandaId)
+    }
+
+    const { data, error } = await query
+
+    // Se o Supabase respondeu com sucesso (mesmo com array vazio [] quando não há pedidos)
+    if (!error && Array.isArray(data)) {
+      const filteredSupabase = apenasAbertos
+        ? data.filter(p => !p.sessao_fechada_em && p.pago !== true && String(p.status || '').toUpperCase() !== 'PAGO')
+        : data
+
+      return filteredSupabase.map(pedido => {
+        const itensFormatados = (pedido.itens_pedido || []).map(item => {
+          const qty = Number(item.quantidade) > 0 ? Number(item.quantidade) : 1
+          const unitPrice = item.preco_unitario != null ? Number(item.preco_unitario) : (Number(item.produtos?.preco) || 0)
+          const sub = qty * unitPrice
+
+          return {
+            id: item.id,
+            produto_id: item.produtos?.id || item.produto_id,
+            nome: item.produtos?.nome || item.nome || 'Item do Cardápio',
+            quantidade: qty,
+            preco_unitario: unitPrice,
+            subtotal: sub,
+            observacao: item.observacao || null
+          }
+        })
+
+        const totalCalculado = itensFormatados.reduce((acc, it) => acc + it.subtotal, 0)
+
+        return {
+          id: pedido.id,
+          restaurante_id: pedido.restaurante_id,
+          comanda_id: pedido.comanda_id,
+          status: String(pedido.status || 'PENDENTE').toUpperCase(),
+          valor_total: pedido.valor_total != null ? Number(pedido.valor_total) : totalCalculado,
+          observacaoGeral: pedido.observacaoGeral || null,
+          criado_em: pedido.criado_em,
+          itens: itensFormatados
+        }
+      })
     }
   } catch (e) {
-    console.warn('Exceção ao buscar pedidos da comanda:', e)
+    console.warn('Exceção ao buscar pedidos da comanda no Supabase:', e)
   }
 
-  // Fallback local
+  // --- FALLBACK LOCAL STORAGE ---
   const allPedidos = getMockPedidos(restauranteId)
-  return allPedidos.filter(p => p.comanda_id === comandaId)
+  const cleanTargetNum = comandaNumero ? String(comandaNumero).replace(/\D/g, '') : ''
+
+  const filtered = allPedidos.filter(p => {
+    // Isolamento multi-tenant
+    if (p.restaurante_id && restauranteId && p.restaurante_id !== restauranteId) return false
+
+    // Se estiver filtrando apenas abertos, excluir sessões fechadas/pagas
+    if (apenasAbertos && (p.sessao_fechada_em || p.pago === true || String(p.status || '').toUpperCase() === 'PAGO')) {
+      return false
+    }
+
+    if (comandaId && p.comanda_id === comandaId) return true
+    
+    // Comparação precisa de número de comanda
+    if (cleanTargetNum) {
+      const pNum = String(p.comandaNumero || '').replace(/\D/g, '')
+      if (pNum && (pNum === cleanTargetNum || pNum.padStart(3, '0') === cleanTargetNum.padStart(3, '0'))) return true
+    }
+
+    return false
+  })
+
+  // Normalizar estrutura de itens no mock local
+  return filtered.map(pedido => {
+    const itens = (pedido.itens || []).map(item => {
+      const qty = Number(item.quantidade) > 0 ? Number(item.quantidade) : 1
+      const unitPrice = item.preco_unitario != null ? Number(item.preco_unitario) : (Number(item.preco) || 0)
+      const sub = item.subtotal != null ? Number(item.subtotal) : (qty * unitPrice)
+
+      return {
+        id: item.id || `it-${Math.random()}`,
+        produto_id: item.produto_id || item.id,
+        nome: item.nome || 'Item do Cardápio',
+        quantidade: qty,
+        preco_unitario: unitPrice,
+        subtotal: sub,
+        observacao: item.observacao || null
+      }
+    })
+
+    const totalCalculado = itens.reduce((acc, it) => acc + it.subtotal, 0)
+
+    return {
+      id: pedido.id,
+      restaurante_id: pedido.restaurante_id || restauranteId,
+      comanda_id: pedido.comanda_id || comandaId,
+      status: String(pedido.status || 'PENDENTE').toUpperCase(),
+      valor_total: pedido.valor_total != null ? Number(pedido.valor_total) : totalCalculado,
+      observacaoGeral: pedido.observacaoGeral || null,
+      criado_em: pedido.criado_em || new Date().toISOString(),
+      itens
+    }
+  })
 }
+
 
 /**
  * Busca todos os pedidos ativos do restaurante para exibição no KDS da cozinha

@@ -43,6 +43,25 @@ export function CartProvider({ children, comandaId }) {
     }
   }, [cartItems, storageKey])
 
+  // Ouvir evento de fechamento da comanda para resetar carrinho em tempo real (AC5)
+  useEffect(() => {
+    const handleComandaFechada = (e) => {
+      const targetId = e.detail?.comandaId
+      if (targetId && targetId === comandaId) {
+        setCartItems([])
+        setObservacaoGeral('')
+        try {
+          localStorage.removeItem(storageKey)
+        } catch (err) {}
+      }
+    }
+
+    window.addEventListener('restaurante_comanda_fechada', handleComandaFechada)
+    return () => {
+      window.removeEventListener('restaurante_comanda_fechada', handleComandaFechada)
+    }
+  }, [comandaId, storageKey])
+
   // Adicionar item ao carrinho
   const addToCart = (produto, quantidade = 1, observacao = '') => {
     const obsTrimmed = observacao.trim()

@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS pedidos (
     comanda_id UUID REFERENCES comandas(id) ON DELETE CASCADE,
     status status_pedido DEFAULT 'PENDENTE',
     valor_total DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
-    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    sessao_fechada_em TIMESTAMP WITH TIME ZONE
 );
 
 -- 7. Tabela Itens do Pedido
@@ -73,6 +74,20 @@ CREATE TABLE IF NOT EXISTS itens_pedido (
     observacao TEXT
 );
 
+-- 8. Tabela Pagamentos & Fechamentos de Comanda (Story 5.2)
+CREATE TABLE IF NOT EXISTS pagamentos (
+    id VARCHAR(100) PRIMARY KEY,
+    restaurante_id UUID REFERENCES restaurantes(id) ON DELETE CASCADE,
+    comanda_id UUID REFERENCES comandas(id) ON DELETE SET NULL,
+    forma_pagamento VARCHAR(50) NOT NULL,
+    valor_total DECIMAL(10, 2) NOT NULL,
+    taxa_servico DECIMAL(10, 2) DEFAULT 0.00,
+    desconto DECIMAL(10, 2) DEFAULT 0.00,
+    valor_recebido DECIMAL(10, 2) NOT NULL,
+    troco DECIMAL(10, 2) DEFAULT 0.00,
+    criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Habilitar RLS (Row Level Security) inicial
 ALTER TABLE restaurantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categorias ENABLE ROW LEVEL SECURITY;
@@ -80,3 +95,5 @@ ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comandas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE itens_pedido ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pagamentos ENABLE ROW LEVEL SECURITY;
+

@@ -77,20 +77,23 @@ export async function fetchComandaByToken(token) {
 
   // 1. Tentar buscar no Supabase
   try {
-    const { data: comanda, error } = await supabase
-      .from('comandas')
-      .select('*, restaurantes(*)')
-      .or(`qr_code_token.eq.${token},numero.eq.${token}`)
-      .maybeSingle()
+    const safeToken = String(token).trim().replace(/[(),."'\s]/g, '')
+    if (safeToken) {
+      const { data: comanda, error } = await supabase
+        .from('comandas')
+        .select('*, restaurantes(*)')
+        .or(`qr_code_token.eq.${safeToken},numero.eq.${safeToken}`)
+        .maybeSingle()
 
-    if (!error && comanda) {
-      const restauranteObj = Array.isArray(comanda.restaurantes) ? comanda.restaurantes[0] : comanda.restaurantes
-      const restaurante = restauranteObj || {
-        id: comanda.restaurante_id,
-        nome: 'Restaurante Sabor & Arte',
-        slug: 'restaurante-sabor-arte'
+      if (!error && comanda) {
+        const restauranteObj = Array.isArray(comanda.restaurantes) ? comanda.restaurantes[0] : comanda.restaurantes
+        const restaurante = restauranteObj || {
+          id: comanda.restaurante_id,
+          nome: 'Restaurante Sabor & Arte',
+          slug: 'restaurante-sabor-arte'
+        }
+        return { comanda, restaurante }
       }
-      return { comanda, restaurante }
     }
   } catch (err) {
     console.warn('Exceção ao buscar comanda no Supabase:', err)
@@ -290,3 +293,383 @@ export async function deleteComanda(id, restauranteId) {
     return true
   }
 }
+
+/**
+ * Busca comanda por número digitado ou token no Caixa POS
+ * @param {string} termoBusca - Ex: "15", "015", "#015", "cmd_demo15"
+ * @param {string} restauranteId - ID do restaurante
+ * @returns {Promise<{comanda: Object, restaurante: Object}|null>}
+ */
+export async function buscarComandaPorNumero(termoBusca, restauranteId = 'demo-restaurante-id') {
+  if (!termoBusca || !termoBusca.trim()) return null
+
+  // Sanitizar entrada removendo caracteres de injeção ou controle do PostgREST
+  const rawClean = termoBusca.trim().replace(/^#/, '')
+  const safeTermo = rawClean.replace(/[(),."'\s]/g, '')
+  if (!safeTermo) return null
+
+  const cleanDigits = safeTermo.replace(/\D/g, '')
+  const intVal = cleanDigits ? parseInt(cleanDigits, 10) : null
+  const standardPad = intVal !== null ? String(intVal).padStart(3, '0') : null
+  const unpadded = intVal !== null ? String(intVal) : null
+
+  // 1. Tentar buscar no Supabase com query segura
+  try {
+    const filters = new Set()
+    filters.add(`qr_code_token.eq.${safeTermo}`)
+    filters.add(`numero.eq.${safeTermo}`)
+    if (standardPad) filters.add(`numero.eq.${standardPad}`)
+    if (unpadded) filters.add(`numero.eq.${unpadded}`)
+
+    const queryFilterStr = Array.from(filters).join(',')
+
+    const { data: comanda, error } = await supabase
+      .from('comandas')
+      .select('*, restaurantes(*)')
+      .eq('restaurante_id', restauranteId)
+      .or(queryFilterStr)
+      .maybeSingle()
+
+    if (!error && comanda) {
+      const restauranteObj = Array.isArray(comanda.restaurantes) ? comanda.restaurantes[0] : comanda.restaurantes
+      const restaurante = restauranteObj || {
+        id: comanda.restaurante_id,
+        nome: 'Restaurante Sabor & Arte',
+        slug: 'restaurante-sabor-arte'
+      }
+      return { comanda, restaurante }
+    }
+  } catch (err) {
+    console.warn('Exceção ao buscar comanda no Supabase para o Caixa:', err)
+  }
+
+  // 2. Fallback Local
+  const todasComandas = await fetchComandas(restauranteId)
+  if (Array.isArray(todasComandas) && todasComandas.length > 0) {
+    const encontrada = todasComandas.find(c => {
+      const numStr = String(c.numero || '').replace(/^#/, '').trim()
+      const numDigits = numStr.replace(/\D/g, '')
+      const tokenStr = String(c.qr_code_token || '').trim()
+
+      return (
+        numStr === safeTermo ||
+        tokenStr === safeTermo ||
+        (standardPad && numStr === standardPad) ||
+        (unpadded && numStr === unpadded) ||
+        (cleanDigits && numDigits === cleanDigits)
+      )
+    })
+
+    if (encontrada) {
+      return {
+        comanda: encontrada,
+        restaurante: {
+          id: restauranteId,
+          nome: 'Restaurante Sabor & Arte',
+          slug: 'restaurante-sabor-arte'
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Busca todas as comandas com status 'EM_USO' com contagem de pedidos para o Caixa POS
+ * @param {string} restauranteId
+ * @returns {Promise<Array>} Lista de comandas ativas com pedidos_count
+ */
+export async function fetchComandasAtivas(restauranteId = 'demo-restaurante-id') {
+  if (!restauranteId) return []
+
+  try {
+    const { data, error } = await supabase
+      .from('comandas')
+      .select('*, pedidos(id, status)')
+      .eq('restaurante_id', restauranteId)
+      .eq('status', 'EM_USO')
+      .order('numero', { ascending: true })
+
+    if (!error && data) {
+      return data.map(cmd => {
+        const activePedidos = (cmd.pedidos || []).filter(p => String(p.status || '').toUpperCase() !== 'CANCELADO')
+        return {
+          ...cmd,
+          pedidos_count: activePedidos.length
+        }
+      })
+    }
+  } catch (err) {
+    console.warn('Exceção ao buscar comandas ativas no Supabase:', err)
+  }
+
+  // Fallback Local com contagem a partir de localStorage
+  const all = await fetchComandas(restauranteId)
+  const ativas = (all || []).filter(c => c.status === 'EM_USO')
+  
+  let mockPedidos = []
+  try {
+    const raw = localStorage.getItem(`restaurante_pedidos_${restauranteId}`)
+    if (raw) mockPedidos = JSON.parse(raw)
+  } catch (e) {}
+
+  return ativas.map(cmd => {
+    const cmdNum = String(cmd.numero || '').replace(/^#/, '').trim()
+    const count = (mockPedidos || []).filter(p => {
+      const pNum = String(p.comandaNumero || '').replace(/^#/, '').trim()
+      const isMatch = p.comanda_id === cmd.id || (cmdNum && pNum && (pNum === cmdNum || String(pNum).padStart(3, '0') === String(cmdNum).padStart(3, '0')))
+      return isMatch && !p.sessao_fechada_em && p.pago !== true && String(p.status || '').toUpperCase() !== 'CANCELADO' && String(p.status || '').toUpperCase() !== 'PAGO'
+    }).length
+
+    return {
+      ...cmd,
+      pedidos_count: count
+    }
+  })
+}
+
+/**
+ * Realiza o fechamento de conta, registro do pagamento e liberação da comanda
+ * (Invariantes AD-1, AD-5 / Story 5.2)
+ * 
+ * @param {Object} params
+ * @param {string} params.restauranteId
+ * @param {string} params.comandaId
+ * @param {string} [params.comandaNumero]
+ * @param {Array} [params.pedidos] - Lista de pedidos a serem encerrados nesta sessão
+ * @param {string} params.formaPagamento - 'PIX' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'DINHEIRO' | 'VALE_REFEICAO'
+ * @param {number} params.valorTotal - Valor total final pago
+ * @param {number} [params.subtotal] - Subtotal dos itens antes de taxas/descontos
+ * @param {number} [params.valorRecebido] - Para pagamentos em dinheiro
+ * @param {number} [params.troco] - Troco calculado
+ * @param {number} [params.taxaServico] - Valor da taxa de serviço (se aplicada)
+ * @param {number} [params.desconto] - Valor do desconto (se aplicado)
+ * @returns {Promise<{ success: boolean, transacao: Object, isMock: boolean }>}
+ */
+export async function fecharComandaPagamento({
+  restauranteId = 'demo-restaurante-id',
+  comandaId,
+  comandaNumero,
+  pedidos = [],
+  formaPagamento = 'PIX',
+  valorTotal = 0,
+  subtotal = 0,
+  valorRecebido = 0,
+  troco = 0,
+  taxaServico = 0,
+  desconto = 0
+}) {
+  if (!comandaId) {
+    throw new Error('ID da comanda é obrigatório para fechamento.')
+  }
+
+  const safeRestauranteId = restauranteId || 'demo-restaurante-id'
+  const timestamp = new Date().toISOString()
+  const transacaoId = `fech-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  
+  // Apenas pedidos válidos não-cancelados devem transicionar para CONCLUIDO
+  const validPedidos = pedidos.filter(p => String(p.status || '').toUpperCase() !== 'CANCELADO')
+  const validPedidosIds = validPedidos.map(p => p.id).filter(Boolean)
+  const allPedidosIds = pedidos.map(p => p.id).filter(Boolean)
+
+  const rawNum = String(comandaNumero || '').replace(/^#/, '').trim()
+  const numFormatado = rawNum ? rawNum.padStart(3, '0') : '001'
+
+  const roundVal = (v) => Math.round((Number(v) || 0) * 100) / 100
+
+  const transacao = {
+    id: transacaoId,
+    restaurante_id: safeRestauranteId,
+    comanda_id: comandaId,
+    comanda_numero: numFormatado,
+    forma_pagamento: formaPagamento,
+    subtotal: roundVal(subtotal || valorTotal),
+    taxa_servico: roundVal(taxaServico),
+    desconto: roundVal(desconto),
+    valor_total: roundVal(valorTotal),
+    valor_recebido: roundVal(valorRecebido || valorTotal),
+    troco: roundVal(troco),
+    pedidos_ids: allPedidosIds,
+    pedidos_resumo: pedidos.map(p => ({
+      id: p.id,
+      status: p.status,
+      criado_em: p.criado_em,
+      valor_total: p.valor_total,
+      itens: (p.itens || []).map(it => ({
+        nome: it.nome,
+        quantidade: it.quantidade,
+        preco_unitario: it.preco_unitario,
+        subtotal: it.subtotal
+      }))
+    })),
+    fechado_em: timestamp,
+    status: 'PAGO'
+  }
+
+  let supabaseSuccess = false
+
+  // 1. Atualizar comanda no Supabase para DISPONIVEL e sessao_iniciada_em: null
+  try {
+    const { error: cmdError } = await supabase
+      .from('comandas')
+      .update({
+        status: 'DISPONIVEL',
+        sessao_iniciada_em: null
+      })
+      .eq('id', comandaId)
+      .eq('restaurante_id', safeRestauranteId)
+
+    if (!cmdError) {
+      // 2. Marcar pedidos válidos como pagos / fechados no Supabase (preservando CANCELADOS)
+      if (validPedidosIds.length > 0) {
+        await supabase
+          .from('pedidos')
+          .update({
+            sessao_fechada_em: timestamp,
+            status: 'CONCLUIDO'
+          })
+          .in('id', validPedidosIds)
+          .eq('restaurante_id', safeRestauranteId)
+      }
+
+      // Marcar sessao_fechada_em também nos cancelados sem sobrescrever status
+      const canceladosIds = pedidos.filter(p => String(p.status || '').toUpperCase() === 'CANCELADO').map(p => p.id).filter(Boolean)
+      if (canceladosIds.length > 0) {
+        await supabase
+          .from('pedidos')
+          .update({
+            sessao_fechada_em: timestamp
+          })
+          .in('id', canceladosIds)
+          .eq('restaurante_id', safeRestauranteId)
+      }
+
+      // 3. Gravar transação de pagamento no Supabase (se existir tabela pagamentos)
+      try {
+        await supabase
+          .from('pagamentos')
+          .insert({
+            id: transacao.id,
+            restaurante_id: transacao.restaurante_id,
+            comanda_id: transacao.comanda_id,
+            forma_pagamento: transacao.forma_pagamento,
+            valor_total: transacao.valor_total,
+            taxa_servico: transacao.taxa_servico,
+            desconto: transacao.desconto,
+            valor_recebido: transacao.valor_recebido,
+            troco: transacao.troco,
+            criado_em: timestamp
+          })
+      } catch (e) {}
+
+      supabaseSuccess = true
+    }
+  } catch (err) {
+    console.warn('Exceção ao fechar comanda no Supabase. Utilizando fallback local:', err)
+  }
+
+  // --- PERSISTÊNCIA LOCAL (Fallback e Sincronização) ---
+  const comandasList = getMockComandas(safeRestauranteId)
+  const updatedComandas = comandasList.map(c => {
+    const cNum = String(c.numero || '').replace(/^#/, '').trim()
+    const isMatch = c.id === comandaId || (rawNum && (cNum === rawNum || cNum.padStart(3, '0') === rawNum.padStart(3, '0')))
+    if (isMatch) {
+      return { ...c, status: 'DISPONIVEL', sessao_iniciada_em: null }
+    }
+    return c
+  })
+  saveMockComandas(safeRestauranteId, updatedComandas)
+
+  // Marcar pedidos como pagos/fechados no mock
+  try {
+    const pedidosKey = `restaurante_pedidos_${safeRestauranteId}`
+    const rawPedidos = localStorage.getItem(pedidosKey)
+    if (rawPedidos) {
+      const allPeds = JSON.parse(rawPedidos)
+      const updatedPeds = allPeds.map(p => {
+        const matchId = allPedidosIds.includes(p.id)
+        const pNum = String(p.comandaNumero || '').replace(/^#/, '').trim()
+        const matchCmd = p.comanda_id === comandaId || (rawNum && (pNum === rawNum || pNum.padStart(3, '0') === rawNum.padStart(3, '0')))
+        if (matchId || matchCmd) {
+          const isCancelado = String(p.status || '').toUpperCase() === 'CANCELADO'
+          return {
+            ...p,
+            sessao_fechada_em: timestamp,
+            pago: true,
+            status: isCancelado ? 'CANCELADO' : 'CONCLUIDO'
+          }
+        }
+        return p
+      })
+      localStorage.setItem(pedidosKey, JSON.stringify(updatedPeds))
+    }
+  } catch (e) {
+    console.warn('Erro ao atualizar pedidos no localStorage:', e)
+  }
+
+  // Salvar registro de fechamento no histórico financeiro local
+  try {
+    const fechamentosKey = `restaurante_fechamentos_${safeRestauranteId}`
+    const rawFech = localStorage.getItem(fechamentosKey)
+    const listFech = rawFech ? JSON.parse(rawFech) : []
+    listFech.unshift(transacao)
+    localStorage.setItem(fechamentosKey, JSON.stringify(listFech))
+  } catch (e) {
+    console.warn('Erro ao salvar fechamento no localStorage:', e)
+  }
+
+  // Limpar carrinho da comanda caso exista
+  try {
+    localStorage.removeItem(`cardapio_carrinho_${comandaId}`)
+  } catch (e) {}
+
+  // Disparar eventos para avisar todas as telas abertas
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('restaurante_comanda_fechada', {
+      detail: { restauranteId: safeRestauranteId, comandaId, comandaNumero: numFormatado, transacao }
+    }))
+    window.dispatchEvent(new CustomEvent('restaurante_pedido_sync', {
+      detail: { restauranteId: safeRestauranteId }
+    }))
+  }
+
+  return {
+    success: true,
+    transacao,
+    isMock: !supabaseSuccess
+  }
+}
+
+/**
+ * Consulta histórico de transações de fechamento de comandas
+ * @param {string} restauranteId
+ * @returns {Promise<Array>}
+ */
+export async function fetchHistoricoFechamentos(restauranteId = 'demo-restaurante-id') {
+  if (!restauranteId) return []
+
+  try {
+    const { data, error } = await supabase
+      .from('pagamentos')
+      .select('*')
+      .eq('restaurante_id', restauranteId)
+      .order('criado_em', { ascending: false })
+
+    if (!error && data && data.length > 0) {
+      return data
+    }
+  } catch (e) {
+    console.warn('Exceção ao buscar pagamentos no Supabase:', e)
+  }
+
+  try {
+    const fechamentosKey = `restaurante_fechamentos_${restauranteId}`
+    const rawFech = localStorage.getItem(fechamentosKey)
+    return rawFech ? JSON.parse(rawFech) : []
+  } catch (e) {
+    return []
+  }
+}
+
+

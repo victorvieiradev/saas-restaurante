@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import AdminDashboard from './pages/AdminDashboard'
 import ComandaCliente from './pages/ComandaCliente'
 import CozinhaKDS from './pages/CozinhaKDS'
+import CaixaPOS from './pages/CaixaPOS'
 
 // Sub-componente Navbar com detecção de estado de login
 function Navbar() {
@@ -131,23 +132,6 @@ function Home() {
   )
 }
 
-
-
-function CaixaPOS() {
-  return (
-    <div className="max-w-xl mx-auto p-6 text-center space-y-6">
-      <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
-        <Receipt className="w-8 h-8" />
-      </div>
-      <h2 className="text-2xl font-bold">Módulo Caixa - POS</h2>
-      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-300">
-        Rota pronta para o Épico 5 (Busca de comandas, Fechamento de Conta & Liberação).
-      </div>
-      <Link to="/" className="inline-block text-sm text-emerald-400 hover:underline">&larr; Voltar para Home</Link>
-    </div>
-  )
-}
-
 export default function App() {
   return (
     <AuthProvider>
@@ -168,7 +152,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/caixa" element={<CaixaPOS />} />
+            <Route
+              path="/caixa"
+              element={
+                <ProtectedRoute>
+                  <CaixaPOS />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin"
               element={
@@ -188,3 +179,4 @@ export default function App() {
     </AuthProvider>
   )
 }
+
