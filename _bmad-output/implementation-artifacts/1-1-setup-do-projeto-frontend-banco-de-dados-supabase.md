@@ -1,6 +1,6 @@
 # Story 1.1: Setup do Projeto Frontend & Banco de Dados (Supabase)
 
-Status: review
+Status: done
 
 ## Story Description
 - **Como** Desenvolvedor,
@@ -56,3 +56,6 @@ Status: review
 - [x] Configurar cliente Supabase em `src/lib/supabase.js`.
 - [x] Criar o arquivo `supabase/schema.sql` com o DDL completo fornecido no `ARCHITECTURE-SPINE.md`.
 - [x] Testar renderização e rotas iniciais da aplicação (`npm run build` e servidor local Vite operacionais).
+
+### Review Findings
+- [x] [Review][Patch] Definir políticas explícitas de CREATE POLICY (RLS) para leitura pública do cardápio e registro de pedidos [supabase/schema.sql:91-100]
