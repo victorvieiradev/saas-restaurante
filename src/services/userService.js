@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase.js'
 
 const STORAGE_KEY_PREFIX = 'restaurante_usuarios_equipe_'
 

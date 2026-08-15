@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchUserProfile, DEMO_USERS } from '../services/userService'
+import { supabase } from '../lib/supabase.js'
+import { fetchUserProfile, DEMO_USERS } from '../services/userService.js'
 
 const AuthContext = createContext({})
 const DEMO_STORAGE_KEY = 'restaurante_gestor_session'
@@ -13,65 +13,81 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const fetchRestauranteAndProfile = async (currentUser) => {
-    if (!currentUser) {
+    if (!currentUser?.email) {
       setRestaurante(null)
       setUserProfile(null)
       return
     }
 
     try {
-      // 1. Carregar dados do restaurante
-      let currentRest = null
-      const { data: restData, error: restErr } = await supabase
+      // 1. Busca primeiro o perfil de equipe por e-mail (Sem limitar por ID arbitrário)
+      const profile = await fetchUserProfile(currentUser.email)
+
+      if (profile) {
+        setUserProfile(profile)
+        const targetRestId = profile.restaurante_id || 'res-demo-001'
+
+        // 2. Busca o estabelecimento a partir do restaurante_id real do perfil
+        const { data: restData } = await supabase
+          .from('restaurantes')
+          .select('*')
+          .eq('id', targetRestId)
+          .maybeSingle()
+
+        if (restData) {
+          setRestaurante(restData)
+        } else {
+          setRestaurante({
+            id: targetRestId,
+            nome: 'Restaurante Sabor & Arte',
+            email: 'admin@restaurante.com',
+            slug: 'sabor-arte'
+          })
+        }
+        return
+      }
+
+      // 3. Caso não possua perfil na tabela de equipe, verifica se é o proprietário/gestor do restaurante
+      const { data: ownerRest } = await supabase
         .from('restaurantes')
         .select('*')
         .eq('email', currentUser.email)
         .maybeSingle()
 
-      if (restData && !restErr) {
-        currentRest = restData
-      } else {
-        currentRest = {
-          id: currentUser.id || 'res-demo-001',
-          nome: currentUser.user_metadata?.nome_restaurante || 'Restaurante Sabor & Arte',
-          email: currentUser.email,
-          slug: 'sabor-arte'
-        }
+      const currentRest = ownerRest || {
+        id: 'res-demo-001',
+        nome: currentUser.user_metadata?.nome_restaurante || 'Restaurante Sabor & Arte',
+        email: currentUser.email,
+        slug: 'sabor-arte'
       }
       setRestaurante(currentRest)
 
-      // 2. Carregar perfil RBAC do usuário
-      const profile = await fetchUserProfile(currentUser.email, currentRest.id)
-      if (profile) {
-        setUserProfile(profile)
-      } else {
-        // Fallback default caso o usuário seja gestor nativo
-        const defaultProfile = {
-          id: currentUser.id || 'usr-default',
-          restaurante_id: currentRest.id,
-          email: currentUser.email,
-          nome: currentUser.user_metadata?.nome || currentUser.email.split('@')[0],
-          role: 'GESTOR',
-          ativo: true,
-          criado_em: new Date().toISOString()
-        }
-        setUserProfile(defaultProfile)
+      const fallbackRole = currentUser.user_metadata?.role || (ownerRest ? 'GESTOR' : 'GESTOR')
+      const defaultProfile = {
+        id: currentUser.id || 'usr-default',
+        restaurante_id: currentRest.id,
+        email: currentUser.email,
+        nome: currentUser.user_metadata?.nome || currentUser.email?.split('@')[0] || 'Usuário',
+        role: fallbackRole,
+        ativo: true,
+        criado_em: new Date().toISOString()
       }
+      setUserProfile(defaultProfile)
     } catch (err) {
       console.warn('Fallback ativado para dados do restaurante e perfil:', err)
       const fallbackRest = {
-        id: currentUser.id || 'res-demo-001',
+        id: 'res-demo-001',
         nome: 'Restaurante Sabor & Arte',
-        email: currentUser.email,
+        email: currentUser.email || 'admin@restaurante.com',
         slug: 'sabor-arte'
       }
       setRestaurante(fallbackRest)
       setUserProfile({
         id: currentUser.id || 'usr-demo-01',
         restaurante_id: fallbackRest.id,
-        email: currentUser.email,
-        nome: 'Gestor',
-        role: 'GESTOR',
+        email: currentUser.email || 'admin@restaurante.com',
+        nome: currentUser.user_metadata?.nome || currentUser.email?.split('@')[0] || 'Gestor',
+        role: currentUser.user_metadata?.role || 'GESTOR',
         ativo: true,
         criado_em: new Date().toISOString()
       })
@@ -79,55 +95,65 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // 1. Verificar se existe uma sessão salva em localStorage (dev/demo/persistência local)
-    const savedDemoSession = localStorage.getItem(DEMO_STORAGE_KEY)
-    if (savedDemoSession) {
-      try {
-        const parsed = JSON.parse(savedDemoSession)
-        if (parsed?.user && parsed?.session) {
-          setUser(parsed.user)
-          setSession(parsed.session)
-          setRestaurante(parsed.restaurante || {
-            id: 'res-demo-001',
-            nome: 'Restaurante Sabor & Arte',
-            email: parsed.user.email,
-            slug: 'sabor-arte'
-          })
-          setUserProfile(parsed.userProfile || {
-            id: parsed.user.id || 'usr-demo-01',
-            restaurante_id: parsed.restaurante?.id || 'res-demo-001',
-            email: parsed.user.email,
-            nome: parsed.user.email.split('@')[0],
-            role: 'GESTOR',
-            ativo: true
-          })
-          setLoading(false)
-          return
+    let isMounted = true
+
+    const initializeAuth = async () => {
+      // 1. Verificar se existe uma sessão salva em localStorage (dev/demo/persistência local)
+      const savedDemoSession = localStorage.getItem(DEMO_STORAGE_KEY)
+      if (savedDemoSession) {
+        try {
+          const parsed = JSON.parse(savedDemoSession)
+          if (parsed?.user && parsed?.session) {
+            if (!isMounted) return
+            setUser(parsed.user)
+            setSession(parsed.session)
+            setRestaurante(parsed.restaurante || {
+              id: 'res-demo-001',
+              nome: 'Restaurante Sabor & Arte',
+              email: parsed.user.email,
+              slug: 'sabor-arte'
+            })
+            setUserProfile(parsed.userProfile || {
+              id: parsed.user.id || 'usr-demo-01',
+              restaurante_id: parsed.restaurante?.id || 'res-demo-001',
+              email: parsed.user.email,
+              nome: parsed.user.email?.split('@')[0] || 'Gestor',
+              role: 'GESTOR',
+              ativo: true
+            })
+            setLoading(false)
+            return
+          }
+        } catch (e) {
+          localStorage.removeItem(DEMO_STORAGE_KEY)
         }
-      } catch (e) {
-        localStorage.removeItem(DEMO_STORAGE_KEY)
+      }
+
+      // 2. Obter sessão nativa do Supabase
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!isMounted) return
+        setSession(session)
+        const currentUser = session?.user ?? null
+        setUser(currentUser)
+        if (currentUser) {
+          await fetchRestauranteAndProfile(currentUser)
+        }
+      } catch (err) {
+        console.warn('Sessão inicial Supabase:', err)
+      } finally {
+        if (isMounted) setLoading(false)
       }
     }
 
-    // 2. Obter sessão nativa do Supabase
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      const currentUser = session?.user ?? null
-      setUser(currentUser)
-      if (currentUser) {
-        fetchRestauranteAndProfile(currentUser)
-      }
-      setLoading(false)
-    }).catch(err => {
-      console.warn('Sessão inicial Supabase:', err)
-      setLoading(false)
-    })
+    initializeAuth()
 
     // Escutar mudanças de autenticação no Supabase
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       if (!localStorage.getItem(DEMO_STORAGE_KEY)) {
-        setSession(session)
-        const currentUser = session?.user ?? null
+        if (!isMounted) return
+        setSession(newSession)
+        const currentUser = newSession?.user ?? null
         setUser(currentUser)
         if (currentUser) {
           await fetchRestauranteAndProfile(currentUser)
@@ -135,11 +161,12 @@ export function AuthProvider({ children }) {
           setRestaurante(null)
           setUserProfile(null)
         }
+        if (isMounted) setLoading(false)
       }
-      setLoading(false)
     })
 
     return () => {
+      isMounted = false
       subscription?.unsubscribe()
     }
   }, [])
@@ -175,16 +202,17 @@ export function AuthProvider({ children }) {
         throw new Error('Senha incorreta. Verifique os dados digitados.')
       }
 
+      const roleFound = userFound.role || 'COZINHA'
       const mockUser = {
         id: userFound.id,
         email: userFound.email,
         user_metadata: {
           nome: userFound.nome,
-          role: userFound.role,
+          role: roleFound,
           nome_restaurante: 'Restaurante Sabor & Arte'
         }
       }
-      const mockSession = { user: mockUser, access_token: `token-${userFound.role.toLowerCase()}-${userFound.id}` }
+      const mockSession = { user: mockUser, access_token: `token-${roleFound.toLowerCase()}-${userFound.id}` }
       const mockRestaurante = {
         id: userFound.restaurante_id || 'res-demo-001',
         nome: 'Restaurante Sabor & Arte',
@@ -193,7 +221,7 @@ export function AuthProvider({ children }) {
       }
 
       saveDemoSession(mockUser, mockSession, mockRestaurante, userFound)
-      return { data: { user: mockUser, session: mockSession, userProfile: userFound }, error: null }
+      return { data: { user: mockUser, session: mockSession, userProfile: userFound, role: roleFound }, error: null }
     }
     return null
   }
@@ -216,7 +244,8 @@ export function AuthProvider({ children }) {
           throw new Error('Acesso desativado. Entre em contato com o gestor do restaurante.')
         }
         await fetchRestauranteAndProfile(data.user)
-        return { data, error: null }
+        const resolvedRole = profile?.role || data.user.user_metadata?.role || 'GESTOR'
+        return { data: { ...data, userProfile: profile, role: resolvedRole }, error: null }
       }
     } catch (authErr) {
       if (authErr.message?.includes('Acesso desativado')) {
@@ -249,7 +278,7 @@ export function AuthProvider({ children }) {
   }
 
   // Helpers de Autorização RBAC
-  const role = userProfile?.role || (user?.user_metadata?.role) || (user ? 'GESTOR' : null)
+  const role = userProfile?.role || user?.user_metadata?.role || (user ? (userProfile ? userProfile.role : null) : null)
   const isAdmin = role === 'GESTOR'
   const isCozinha = role === 'COZINHA'
   const isCaixa = role === 'CAIXA'
@@ -282,4 +311,3 @@ export function useAuth() {
   }
   return context
 }
-
