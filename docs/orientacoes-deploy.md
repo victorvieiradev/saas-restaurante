@@ -16,7 +16,7 @@ Este documento contém o passo a passo completo para realizar o deploy em produ�
 ### 1️⃣ Enviar alterações para o GitHub
 Certifique-se de que todas as alterações foram salvas e enviadas para o seu repositório remoto:
 ```bash
-git push origin master
+git push origin main
 ```
 
 ### 2️⃣ Importar Projeto na Vercel
