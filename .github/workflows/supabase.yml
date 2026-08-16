@@ -22,14 +22,21 @@ jobs:
         with:
           version: latest
 
-      - name: 🔗 Link Supabase Project
+      - name: 🔗 Link & Push Migrations to Supabase
         run: |
-          supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # Sanitiza o Project Ref caso tenha vindo como URL completa ou com espacos
+          RAW_REF="${{ secrets.SUPABASE_PROJECT_ID }}"
+          CLEAN_REF=$(echo "$RAW_REF" | sed -E 's|https?://||g' | sed -E 's|.*project/||g' | sed -E 's|\.supabase\.co.*||g' | tr -d ' "\r\n\t')
 
-      - name: 🚀 Push Migrations to Database
-        run: |
+          if [ -z "$CLEAN_REF" ]; then
+            echo "❌ Erro: O secret SUPABASE_PROJECT_ID está vazio ou inválido."
+            exit 1
+          fi
+
+          echo "Vinculando ao projeto Supabase..."
+          supabase link --project-ref "$CLEAN_REF" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+          echo "Aplicando migrações no banco de dados..."
           supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}" --include-all
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
