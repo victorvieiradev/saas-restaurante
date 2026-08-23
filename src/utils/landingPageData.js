@@ -168,6 +168,7 @@ export const PRICING_PLANS = [
     highlight: false,
     badge: null,
     features: [
+      'Até 300 pedidos processados/mês',
       'Até 15 mesas / comandas ativas simultâneas',
       'Cardápio Digital QR Code ilimitado',
       '1 Tela de Cozinha KDS em tempo real',
@@ -187,6 +188,7 @@ export const PRICING_PLANS = [
     highlight: true,
     badge: 'Mais Escolhido 🔥',
     features: [
+      'Até 1.200 pedidos processados/mês',
       'Mesas e comandas ilimitadas',
       'Cardápio Digital com fotos em alta definição',
       'Múltiplas telas KDS com Alerta Sonoro WebSockets',
@@ -207,6 +209,7 @@ export const PRICING_PLANS = [
     highlight: false,
     badge: 'Grandes Operações',
     features: [
+      'Até 3.500 pedidos processados/mês',
       'Múltiplas unidades e filiais centralizadas',
       'Tudo do Plano Pro sem limites',
       'Onboarding VIP com treinamento de equipe',
@@ -243,7 +246,7 @@ export const FAQ_ITEMS = [
   {
     question: 'Como funciona o teste gratuito de 14 dias?',
     answer:
-      'Você tem 14 dias para usar o sistema completo no seu restaurante, cadastrar seu cardápio, gerar QR Codes e testar todas as telas sem nenhum compromisso. Não exigimos cartão de crédito prévio para começar.'
+      'Você tem 14 dias de acesso completo a todas as funcionalidades do plano escolhido. Para ativar sua conta com segurança, solicitamos os dados de faturamento onde R$ 0,00 é cobrado hoje. A primeira mensalidade só ocorrerá após o 14º dia (D+14). Se desejar cancelar antes disso, basta 1 clique no Painel do Gestor e nada será cobrado.'
   },
   {
     question: 'Posso alterar os itens e preços do cardápio a qualquer momento?',

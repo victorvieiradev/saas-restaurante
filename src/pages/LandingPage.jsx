@@ -97,7 +97,7 @@ export default function LandingPage() {
             {/* Hero CTAs */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
               <Link
-                to="/login"
+                to="/onboarding"
                 className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-base hover:from-orange-600 hover:to-amber-600 transition-all shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 group cursor-pointer"
               >
                 <span>Iniciar Teste Grátis de 14 Dias</span>
@@ -116,7 +116,11 @@ export default function LandingPage() {
             <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs sm:text-sm text-slate-400">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Sem taxa de instalação</span>
+                <span>R$ 0,00 cobrado hoje (14 dias grátis)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>Cancele quando quiser com 1 clique</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -124,7 +128,7 @@ export default function LandingPage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Suporte humanizado no WhatsApp</span>
+                <span>Suporte no WhatsApp</span>
               </div>
             </div>
           </div>
@@ -181,10 +185,10 @@ export default function LandingPage() {
 
                 <div className="pt-4">
                   <Link
-                    to="/login"
+                    to="/onboarding"
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-slate-950 font-bold text-sm hover:bg-slate-200 transition-colors shadow-md"
                   >
-                    <span>Experimentar {currentModule.title}</span>
+                    <span>Começar Teste com {currentModule.title}</span>
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
@@ -476,10 +480,10 @@ export default function LandingPage() {
 
                   <div className="pt-6">
                     <Link
-                      to="/login"
+                      to="/onboarding"
                       className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-orange-500 hover:text-white text-slate-300 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <span>Acessar {mod.title}</span>
+                      <span>Testar {mod.title} Grátis</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
@@ -602,7 +606,7 @@ export default function LandingPage() {
 
             <div className="text-center pt-2">
               <Link
-                to="/login"
+                to="/onboarding"
                 className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-sm transition-colors shadow-lg shadow-emerald-500/20"
               >
                 <span>Quero Aumentar Meu Faturamento Agora</span>
@@ -677,7 +681,7 @@ export default function LandingPage() {
               Escolha o plano ideal para o tamanho do seu negócio
             </h3>
             <p className="text-slate-400 text-base">
-              Todos os planos incluem 14 dias de teste grátis sem necessidade de cartão de crédito.
+              Todos os planos incluem 14 dias de teste grátis com R$ 0,00 cobrado hoje e cancelamento a qualquer momento com 1 clique.
             </p>
 
             {/* Toggle Mensal / Anual */}
@@ -886,7 +890,7 @@ export default function LandingPage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <Link
-              to="/login"
+              to="/onboarding"
               className="w-full sm:w-auto px-8 py-4 rounded-xl bg-orange-500 text-white font-bold text-base hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/30 flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Criar Minha Conta Grátis</span>
