@@ -14,6 +14,7 @@ updated: "2026-08-03"
 - **Épico 4:** Módulo Cozinha - KDS em Tempo Real (WebSockets)
 - **Épico 5:** Módulo Caixa - POS, Consumo & Fechamento de Comandas
 - **Épico 6:** Gestão de Equipe & Controle de Acesso por Perfil (RBAC Multi-Tenant)
+- **Épico 7:** Sistema de Assinaturas e Cobrança Recorrente SaaS (Gateway Asaas)
 
 ---
 
@@ -203,3 +204,77 @@ updated: "2026-08-03"
   - [ ] Se um usuário do `CAIXA` tentar navegar para `/admin` ou `/cozinha`, o sistema impede o acesso e o redireciona para `/caixa`.
   - [ ] Navbar e cabeçalhos adaptados para exibir o perfil ativo do usuário e botão de logout rápido.
   - [ ] Garantia de que todos os filtros de tempo real do KDS e do Caixa filtrem estritamente pelo `restaurante_id` da sessão ativa.
+
+---
+
+## 💳 Épico 7: Sistema de Assinaturas e Cobrança Recorrente SaaS (Gateway Asaas)
+
+### Story 7.1: Modelagem de Dados de Assinatura, Faturas & Triggers de Pedidos
+- **Como** Desenvolvedor / Arquiteto de Dados,
+- **Quero** estender a tabela `restaurantes` com campos de controle de assinatura, criar a tabela `faturas` e a trigger de contagem de pedidos,
+- **Para que** o sistema armazene de forma segura e consistente o ciclo de faturamento e o consumo de volume do cliente.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Migration SQL no Supabase com campos adicionados em `restaurantes`: `plano`, `status_assinatura` (`trialing`, `active`, `past_due`, `canceled`), `limite_pedidos_mes`, `pedidos_consumidos_mes`, `data_inicio_ciclo`, `data_fim_trial`, `asaas_customer_id`, `asaas_subscription_id`, `cartao_ultimos_digitos`, `cartao_bandeira`, `cpf_cnpj`, `endereco_completo`.
+  - [ ] Tabela `faturas` criada com campos: `id (UUID)`, `restaurante_id (FK)`, `asaas_payment_id (UNIQUE)`, `valor`, `forma_pagamento`, `status`, `url_fatura`, `url_comprovante`, `data_vencimento`, `data_pagamento`, `created_at`.
+  - [ ] Função e Trigger `incrementar_pedidos_restaurante()` no PostgreSQL disparada após `INSERT ON pedidos` incrementando atomicamente `pedidos_consumidos_mes`.
+  - [ ] Políticas RLS configuradas garantindo que gestores acessem apenas suas próprias faturas.
+
+### Story 7.2: Supabase Edge Functions de Cobrança (`create-subscription`, `cancel-subscription`, `asaas-webhook`)
+- **Como** Sistema de Backend Serverless,
+- **Quero** expor Edge Functions para criação de assinatura no Asaas, cancelamento sem custos e processamento de webhooks de pagamento,
+- **Para que** as operações financeiras ocorram de forma segura sem expor as credenciais de API do Asaas no frontend.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Edge Function `create-subscription`:
+    - Cria ou recupera o cliente no Asaas (`POST /v3/customers`).
+    - Cria a assinatura no Asaas (`POST /v3/subscriptions`) com `billingType: 'CREDIT_CARD'`, dados do titular, cartão e `nextDueDate` configurada para **D+14** (hoje + 14 dias).
+    - Garante cobrança de **R$ 0,00** no dia 0 (apenas validação/tokenização do cartão).
+    - Atualiza o registro do restaurante no Supabase com `status_assinatura = 'trialing'`, `data_fim_trial = NOW() + 14 days`, `cartao_ultimos_digitos` e `cartao_bandeira`.
+  - [ ] Edge Function `cancel-subscription`:
+    - Valida o token JWT do usuário gestor autenticado.
+    - Executa `DELETE /v3/subscriptions/{asaas_subscription_id}` na API do Asaas.
+    - Atualiza no Supabase `status_assinatura = 'canceled'`, garantindo que nenhuma cobrança ocorra.
+  - [ ] Edge Function `asaas-webhook`:
+    - Valida o header `asaas-access-token` contra `ASAAS_WEBHOOK_SECRET`.
+    - Ao receber `PAYMENT_CONFIRMED` ou `PAYMENT_RECEIVED`: atualiza `status_assinatura = 'active'`, reseta `pedidos_consumidos_mes = 0`, atualiza `data_inicio_ciclo = NOW()` e insere o registro na tabela `faturas`.
+    - Ao receber `PAYMENT_OVERDUE`: atualiza `status_assinatura = 'past_due'`.
+
+### Story 7.3: Frontend: Wizard de Onboarding & Checkout com Cartão (`OnboardingCheckout.jsx`)
+- **Como** Novo Dono de Restaurante,
+- **Quero** passar por um fluxo de cadastro e checkout intuitivo em 3 etapas com validação de CPF/CNPJ, CEP e cartão de crédito,
+- **Para que** eu inicie meu período de testes de 14 dias com total transparência e confiança.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Wizard progressivo em 3 passos com barra de progresso visual:
+    - **Passo 1 (Identificação):** Nome, E-mail, Senha (mín. 6 chars), WhatsApp/Celular, Tipo (CPF ou CNPJ) com máscara e validação matemática de dígitos verificadores.
+    - **Passo 2 (Restaurante & Endereço):** Nome Fantasia, Slug automático, CEP com preenchimento automático de Logradouro/Bairro/Cidade/UF via ViaCEP, Número e Complemento.
+    - **Passo 3 (Plano & Cartão):** Seletor de planos (Starter: R$ 119/mês; Pro: R$ 229/mês; Scale: R$ 399/mês; ciclos Mensal/Anual -20%), campos de cartão de crédito (Número com detecção visual de bandeira Visa/Master/Elo/Amex/Hiper, Nome do Titular, Validade MM/AA e CVV).
+  - [ ] Selo de Transparência destacado: *"Total cobrado hoje: R$ 0,00. Seu trial gratuito expira em [D+14]. Cancele quando quiser no painel sem cobranças."*
+  - [ ] Integração com a Edge Function `create-subscription` (e fallback simulado funcional em ambiente local/mock).
+  - [ ] Redirecionamento automático pós-cadastro para `/admin` com login efetuado e mensagem de boas-vindas.
+
+### Story 7.4: Frontend: Painel de Gestão de Assinatura, Cancelamento e Faturas (`AdminAssinatura.jsx`)
+- **Como** Gestor do Restaurante,
+- **Quero** gerenciar minha assinatura, acompanhar os dias restantes de teste, ver dados do cartão e baixar faturas no painel,
+- **Para que** eu tenha controle total e autonomia sobre o plano e faturamento do meu negócio.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Nova aba ou rota `/admin/assinatura` com design profissional integrado ao `AdminDashboard`.
+  - [ ] Card de Status do Plano:
+    - Se em Trial: badge *"Em Período de Testes (Trial)"*, indicador de dias restantes (ex: *"Faltam 10 dias para o término do trial"*).
+    - Se Ativo: badge verde *"Assinatura Ativa"*, data da próxima renovação e valor da mensalidade.
+  - [ ] Botão **"Cancelar Assinatura"** visível e acessível:
+    - Modal de confirmação claro explicando que durante o trial nenhum valor foi ou será cobrado.
+    - Ao confirmar, dispara a Edge Function `cancel-subscription` e atualiza a interface instantaneamente para o status cancelado.
+  - [ ] Card do Cartão Cadastrado: exibe bandeira (ícone) e últimos 4 dígitos (ex: `Mastercard final 4829`) com botão para atualização de cartão.
+  - [ ] Tabela de Histórico de Faturas: lista faturas emitidas com Data, Valor, Status (`Paga`, `Pendente`, `Vencida`), link para visualização/download de fatura e comprovante Asaas.
+
+### Story 7.5: Gestão e Alerta de Limites de Pedidos do Plano (Fair Use Policy)
+- **Como** Gestor e Operador do Restaurante,
+- **Quero** visualizar uma barra de progresso do consumo de pedidos mensais e receber alertas amigáveis ao aproximar do limite,
+- **Para que** meu restaurante nunca pare de vender e eu possa fazer upgrade do plano na hora certa.
+- **Critérios de Aceitação (ACs):**
+  - [ ] Widget de consumo no Dashboard Admin e na tela de Assinatura:
+    - Barra de progresso: `pedidos_consumidos_mes` / `limite_pedidos_mes` (ex: `180 / 300 pedidos consumidos (60%)`).
+  - [ ] Regras de Notificação Visual:
+    - Consumo $\ge$ 80%: Alerta amarelo amigável: *"Você utilizou 80% dos pedidos do seu plano. Faça o upgrade para manter sua operação contínua."*
+    - Consumo $\ge$ 100%: Alerta de limite atingido com CTA de upgrade em 1 clique para o próximo plano (Starter $\rightarrow$ Pro $\rightarrow$ Scale).
+  - [ ] Garantia de Não-Interrupção: Pedidos em andamento no salão e KDS continuam sendo processados sem travas imediatas que prejudiquem o atendimento ao cliente.
+  - [ ] Modal de Upgrade de Plano com recálculo proporcional e confirmação instantânea.

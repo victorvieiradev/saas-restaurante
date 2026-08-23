@@ -65,6 +65,17 @@ O **Sistema de Cardápio Digital & Comandas QR Code** é uma plataforma SaaS vol
 3. Maria busca as comandas abertas, confere extratos e registra pagamentos **exclusivamente** das comandas do restaurante do João.
 4. Se Maria tentar acessar `/admin` ou `/cozinha`, o sistema impede o acesso não autorizado.
 
+### UJ-7: Roberto (Novo Gestor) - Onboarding, Trial de 14 Dias e Gestão de Assinatura
+1. Roberto acessa a Landing Page ou página de registro do SaaS (`/onboarding` ou `/checkout`).
+2. Roberto completa o fluxo em 3 etapas progressivas:
+   - **Etapa 1:** Insere dados pessoais (Nome, E-mail, Senha, WhatsApp, CPF/CNPJ com validação matemática).
+   - **Etapa 2:** Insere dados do Restaurante (Nome, Slug da URL) e Endereço com auto-preenchimento por CEP.
+   - **Etapa 3:** Escolhe o Plano (ex: **Pro** - R$ 229/mês), insere os dados do Cartão de Crédito e visualiza o selo de transparência: *"Total hoje: R$ 0,00. Primeira cobrança apenas em D+14. Cancele quando quiser no painel sem custos"*.
+3. O sistema cria o tenant no Supabase e cadastra a assinatura no gateway Asaas com primeiro vencimento agendado para 14 dias no futuro (`nextDueDate = D+14`).
+4. Roberto ganha acesso imediato ao painel gestor com status `trialing` e contador de 14 dias restantes.
+5. Se Roberto optar por cancelar antes dos 14 dias, clica em **"Cancelar Assinatura"** no painel: a assinatura no Asaas é deletada instantaneamente e nenhum centavo é cobrado.
+6. Se Roberto mantiver o uso, no 14º dia o Asaas debita automaticamente a primeira mensalidade via cartão tokenizado e o webhook do sistema atualiza o status para `active`.
+
 ---
 
 ## 3. Requisitos Funcionais (FRs)
@@ -106,7 +117,15 @@ O **Sistema de Cardápio Digital & Comandas QR Code** é uma plataforma SaaS vol
   - Usuários com perfil `COZINHA` são redirecionados pós-login diretamente para `/cozinha` e bloqueados de acessar `/admin` ou `/caixa`.
   - Usuários com perfil `CAIXA` são redirecionados pós-login diretamente para `/caixa` e bloqueados de acessar `/admin` ou `/cozinha`.
   - Usuários com perfil `GESTOR` possuem acesso amplo e irrestrito ao `/admin`, `/caixa`, `/cozinha` e gestão de equipe.
-- **FR-505:** Isolamento de dados multi-tenant estrito: qualquer listagem, consulta ou subscrição em tempo real de pedidos, comandas, produtos e relatórios deve filtrar exclusivamente pelo `restaurante_id` da conta autenticada, sendo estritamente proibido qualquer vazamento ou cruzamento de informações entre diferentes estabelecimentos.
+- **FR-505:** Isolamento de dados multi-tenant estrito: qualquer listagem, consulta ou subscrição em tempo real de pedidos, comandas, produtos e relatórios deve filtrar exclusivamente pelo `restaurante_id` da conta autenticada.
+
+### 3.6 Módulo de Assinaturas SaaS, Trial 14 Dias & Gestão de Planos por Volume (Asaas)
+- **FR-601 (Onboarding em 3 Passos):** O sistema deve fornecer um fluxo progressivo de checkout com validação de CPF/CNPJ, consulta de endereço por CEP (ViaCEP) e coleta segura de cartão de crédito.
+- **FR-602 (Trial 14 Dias Card-Upfront):** O cadastro deve criar a assinatura no Asaas com cobrança agendada para 14 dias no futuro (`nextDueDate = D+14`), sem qualquer débito imediato no dia 0 (R$ 0,00 cobrado).
+- **FR-603 (Cancelamento sem Custo no Trial):** Se o gestor solicitar o cancelamento durante os 14 dias, o sistema deve acionar a API do Asaas (`DELETE /v3/subscriptions/{id}`), invalidar a cobrança futura e atualizar o status local para `canceled`.
+- **FR-604 (Processamento de Webhooks de Pagamento):** O sistema deve expor um webhook seguro (`asaas-webhook`) para receber eventos do Asaas (`PAYMENT_CONFIRMED`, `PAYMENT_OVERDUE`, `SUBSCRIPTION_DELETED`), atualizando o status do restaurante (`active`, `past_due`, `canceled`) e registrando o histórico de faturas na tabela `faturas`.
+- **FR-605 (Planos por Volume de Pedidos & Monitoramento de Consumo):** O sistema deve categorizar planos por limites de pedidos mensais (Starter: até 300; Pro: até 1.200; Scale: até 3.500) e contabilizar automaticamente os pedidos criados via trigger no banco de dados.
+- **FR-606 (Painel de Gestão de Assinatura no Admin):** O gestor deve ter uma tela dedicada (`/admin/assinatura` ou aba no painel) exibindo dias restantes de trial, status da assinatura, consumo de pedidos vs limite, dados do cartão (bandeira e final), histórico de faturas e botão para cancelamento ou upgrade.
 
 ---
 
@@ -118,6 +137,8 @@ O **Sistema de Cardápio Digital & Comandas QR Code** é uma plataforma SaaS vol
 - **NFR-004 (Disponibilidade):** O sistema deve operar com disponibilidade mínima de 99.9% (SLA de restaurante em operação).
 - **NFR-005 (Segurança):** Impede inserção de pedidos em comandas que estejam com status `Encerrada/Inativa`. Sanitização contra injeções SQL e XSS.
 - **NFR-006 (Isolamento Multi-Tenant & RBAC):** Proibição categórica de vazamento de dados entre tenants. Cada consulta de API, token JWT e canal de WebSocket deve validar o `restaurante_id` antes de expor ou modificar dados.
+- **NFR-007 (PCI Compliance & Tokenização Segura):** Os dados confidenciais de cartão de crédito (número completo e CVV) não trafegam nem são persistidos no Supabase, sendo enviados diretamente para tokenização segura na API do Asaas.
+- **NFR-008 (Transparência de Faturamento & Recorrência Pura):** A cobrança é lançada mensalmente/anualmente sem consumir o limite anual total do cartão, garantindo cancelamento com 1 clique durante o período de 14 dias sem qualquer débito.
 
 ---
 
@@ -129,6 +150,7 @@ erDiagram
     RESTAURANTE ||--|{ COMANDA : possui
     RESTAURANTE ||--|{ PRODUTO : possui
     RESTAURANTE ||--|{ USUARIO_RESTAURANTE : possui
+    RESTAURANTE ||--|{ FATURA : gera
     CATEGORIA ||--|{ PRODUTO : contem
     COMANDA ||--|{ PEDIDO : agrupa
     PEDIDO ||--|{ ITEM_PEDIDO : inclui
@@ -139,8 +161,33 @@ erDiagram
         string nome
         string slug UK
         string email
-        string senha_hash
+        string plano "starter | pro | scale | enterprise"
+        string status_assinatura "trialing | active | past_due | canceled"
+        int limite_pedidos_mes
+        int pedidos_consumidos_mes
+        datetime data_inicio_ciclo
+        datetime data_fim_trial
+        string asaas_customer_id
+        string asaas_subscription_id
+        string cartao_ultimos_digitos
+        string cartao_bandeira
+        string cpf_cnpj
+        jsonb endereco_completo
         datetime criado_em
+    }
+
+    FATURA {
+        uuid id PK
+        uuid restaurante_id FK
+        string asaas_payment_id UK
+        decimal valor
+        string forma_pagamento "CREDIT_CARD"
+        string status "PENDING | RECEIVED | CONFIRMED | OVERDUE"
+        string url_fatura
+        string url_comprovante
+        date data_vencimento
+        datetime data_pagamento
+        datetime created_at
     }
 
     USUARIO_RESTAURANTE {
@@ -182,6 +229,7 @@ erDiagram
 
     PEDIDO {
         uuid id PK
+        uuid restaurante_id FK
         uuid comanda_id FK
         string status "PENDENTE | EM_PREPARO | CONCLUIDO | CANCELADO"
         decimal valor_total
@@ -202,6 +250,6 @@ erDiagram
 
 ## 6. Próximos Passos no Ciclo BMad
 
-- **`bmad-ux`:** Desenhar o wireframe e protótipo das telas principais.
-- **`bmad-architecture`:** Definir a pilha de tecnologias (Vite/React ou Next.js + Tailwind CSS + Supabase/Node.js).
-- **`bmad-create-epics-and-stories`:** Quebrar este PRD em Épicos e Histórias de Usuário testáveis.
+- **`bmad-architecture`:** Atualizar o `ARCHITECTURE-SPINE.md` com a arquitetura de Edge Functions, integração Asaas e Webhooks.
+- **`bmad-create-epics-and-stories`:** Gerar o Épico 7 com suas histórias de implementação atômicas.
+- **`bmad-sprint-planning`:** Organizar o `sprint-status.yaml` para iniciar a codificação da primeira story do Épico 7.
