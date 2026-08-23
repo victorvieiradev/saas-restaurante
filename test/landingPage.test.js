@@ -48,9 +48,9 @@ describe('Landing Page & Sales Conversion Engine Unit Tests', () => {
   describe('Pricing Plans Configuration', () => {
     test('Possui planos válidos com opções mensal e anual com desconto', () => {
       assert.ok(Array.isArray(PRICING_PLANS), 'PRICING_PLANS deve ser um array')
-      assert.equal(PRICING_PLANS.length, 3, 'Deve conter 3 planos: Starter, Pro e Enterprise')
+      assert.equal(PRICING_PLANS.length, 3, 'Deve conter 3 planos: Starter, Pro e Scale')
 
-      const [starter, pro, enterprise] = PRICING_PLANS
+      const [starter, pro, scale] = PRICING_PLANS
 
       assert.equal(starter.id, 'starter')
       assert.equal(typeof starter.priceMonthly, 'number')
@@ -63,8 +63,8 @@ describe('Landing Page & Sales Conversion Engine Unit Tests', () => {
       assert.ok(pro.priceAnnual < pro.priceMonthly)
       assert.ok(pro.features.length >= 6)
 
-      assert.equal(enterprise.id, 'enterprise')
-      assert.ok(enterprise.features.length >= 6)
+      assert.equal(scale.id, 'scale')
+      assert.ok(scale.features.length >= 6)
     })
   })
 

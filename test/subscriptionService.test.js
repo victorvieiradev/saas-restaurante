@@ -449,8 +449,11 @@ describe('subscriptionService Unit Tests', () => {
       assert.ok(PLANS_CONFIG.pro)
       assert.ok(PLANS_CONFIG.scale)
       assert.equal(PLANS_CONFIG.starter.limite_pedidos, 300)
-      assert.equal(PLANS_CONFIG.pro.limite_pedidos, 1000)
-      assert.equal(PLANS_CONFIG.scale.limite_pedidos, 3000)
+      assert.equal(PLANS_CONFIG.pro.limite_pedidos, 1200)
+      assert.equal(PLANS_CONFIG.scale.limite_pedidos, 3500)
+      assert.equal(PLANS_CONFIG.starter.preco_mensal, 119)
+      assert.equal(PLANS_CONFIG.pro.preco_mensal, 229)
+      assert.equal(PLANS_CONFIG.scale.preco_mensal, 399)
     })
 
     test('MOCK_FATURAS exporta faturas padrão válidas', () => {

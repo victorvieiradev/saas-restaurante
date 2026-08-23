@@ -9,30 +9,38 @@ export const PLANS_CONFIG = {
   starter: {
     id: 'starter',
     nome: 'Starter',
-    preco: 97.00,
+    preco_mensal: 119.00,
+    preco_anual: 95.00,
+    preco: 119.00,
     limite_pedidos: 300,
     taxa_adicional: 0.20,
-    descricao: 'Ideal para cafeterias, lanchonetes e pequenos restaurantes em início de operação.'
+    descricao: 'Ideal para cafés, lanchonetes e pequenos bistrôs que querem começar.'
   },
   pro: {
     id: 'pro',
     nome: 'Pro',
-    preco: 197.00,
-    limite_pedidos: 1000,
+    preco_mensal: 229.00,
+    preco_anual: 183.00,
+    preco: 229.00,
+    limite_pedidos: 1200,
     taxa_adicional: 0.15,
-    descricao: 'Perfeito para restaurantes e bares com fluxo constante e equipe distribuída.'
+    descricao: 'O mais completo para restaurantes, bares e hamburguerias em crescimento.'
   },
   scale: {
     id: 'scale',
     nome: 'Scale',
-    preco: 397.00,
-    limite_pedidos: 3000,
+    preco_mensal: 399.00,
+    preco_anual: 319.00,
+    preco: 399.00,
+    limite_pedidos: 3500,
     taxa_adicional: 0.10,
-    descricao: 'Projetado para operações de alta performance e casas de grande porte.'
+    descricao: 'Projetado para operações de alta escala, franquias e redes.'
   },
   enterprise: {
     id: 'enterprise',
     nome: 'Enterprise',
+    preco_mensal: null,
+    preco_anual: null,
     preco: null,
     limite_pedidos: null,
     taxa_adicional: null,

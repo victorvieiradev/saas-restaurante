@@ -201,20 +201,19 @@ export const PRICING_PLANS = [
     ctaLink: '/onboarding?plan=pro'
   },
   {
-    id: 'enterprise',
-    name: 'Scale / Redes',
-    subtitle: 'Para franquias, redes de restaurantes e operações de alta escala.',
+    id: 'scale',
+    name: 'Scale',
+    subtitle: 'Projetado para operações de alta escala, franquias e redes.',
     priceMonthly: 399,
     priceAnnual: 319,
     highlight: false,
-    badge: 'Grandes Operações',
+    badge: 'Alta Performance 🚀',
     features: [
       'Até 3.500 pedidos processados/mês',
       'Múltiplas unidades e filiais centralizadas',
       'Tudo do Plano Pro sem limites',
-      'Onboarding VIP com treinamento de equipe',
+      'Onboarding VIP com Gerente de Conta',
       'Integrações personalizadas de ERP e fiscais',
-      'Gerente de conta exclusivo',
       'SLA garantido de 99.9% com suporte dedicado'
     ],
     ctaText: 'Testar Plano Scale',

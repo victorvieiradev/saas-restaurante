@@ -148,39 +148,45 @@ export default function OnboardingCheckout() {
     {
       id: 'starter',
       name: 'Starter',
-      description: 'Ideal para cafeterias, lanchonetes e pequenos restaurantes.',
+      description: 'Ideal para cafés, lanchonetes e pequenos bistrôs que querem começar.',
       priceMonthly: 119,
       priceAnnual: 95,
       pedidos: 'Até 300 pedidos/mês',
-      features: ['Cardápio QR Code ilimitado', '1 Tela KDS Cozinha', '1 Terminal Caixa POS']
+      features: [
+        'Até 300 pedidos processados/mês',
+        'Até 15 mesas / comandas ativas',
+        'Cardápio Digital QR Code ilimitado',
+        '1 Tela de Cozinha KDS & 1 Caixa POS'
+      ]
     },
     {
       id: 'pro',
       name: 'Pro',
-      description: 'Perfeito para restaurantes, bares e casas com equipe distribuída.',
+      description: 'O mais completo para restaurantes, bares e hamburguerias em crescimento.',
       priceMonthly: 229,
       priceAnnual: 183,
       pedidos: 'Até 1.200 pedidos/mês',
       isPopular: true,
       features: [
+        'Até 1.200 pedidos processados/mês',
         'Mesas e comandas ilimitadas',
-        'KDS em tempo real com Alerta Sonoro',
-        'Controle de Equipe RBAC',
-        'Suporte Prioritário WhatsApp'
+        'Múltiplas telas KDS com Alerta Sonoro',
+        'Gestão de Equipe RBAC (Cozinha e Caixa)',
+        'Suporte Prioritário 24/7 via WhatsApp'
       ]
     },
     {
       id: 'scale',
       name: 'Scale',
-      description: 'Projetado para operações de alta performance e casas de grande porte.',
+      description: 'Projetado para operações de alta escala, franquias e redes.',
       priceMonthly: 399,
       priceAnnual: 319,
       pedidos: 'Até 3.500 pedidos/mês',
       features: [
-        'Alto volume de pedidos',
-        'Múltiplas telas KDS e Caixas',
-        'Gestão avançada de equipe',
-        'Atendimento VIP dedicado'
+        'Até 3.500 pedidos processados/mês',
+        'Múltiplas unidades e filiais centralizadas',
+        'Tudo do Plano Pro sem limites',
+        'Onboarding VIP com Gerente de Conta'
       ]
     }
   ]
