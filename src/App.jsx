@@ -8,7 +8,8 @@ import {
   LogOut,
   AlertTriangle,
   X,
-  User
+  User,
+  Sparkles
 } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
