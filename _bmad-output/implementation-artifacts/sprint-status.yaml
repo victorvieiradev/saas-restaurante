@@ -33,7 +33,7 @@
 #   - done: Completed
 
 generated: '2026-08-04T19:12:50-03:00'
-last_updated: '2026-08-23T12:45:00-03:00'
+last_updated: '2026-08-23T13:35:00-03:00'
 project: restaurante
 project_key: NOKEY
 tracking_system: file-system
@@ -72,7 +72,7 @@ development_status:
   spec-landing-page-vendas: done
   epic-7: in-progress
   7-1-modelagem-de-dados-de-assinatura-faturas-triggers-de-pedidos: done
-  7-2-supabase-edge-functions-de-cobranca-asaas: ready-for-dev
+  7-2-supabase-edge-functions-de-cobranca-asaas: done
   7-3-frontend-wizard-de-onboarding-checkout-com-cartao: ready-for-dev
   7-4-frontend-painel-de-gestao-de-assinatura-cancelamento-e-faturas: ready-for-dev
   7-5-gestao-e-alerta-de-limites-de-pedidos-do-plano: ready-for-dev

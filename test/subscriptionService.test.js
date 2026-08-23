@@ -6,6 +6,8 @@ import {
   fetchFaturas,
   fetchSubscriptionStatus,
   saveFatura,
+  createSubscription,
+  cancelSubscription,
   MOCK_FATURAS,
   PLANS_CONFIG
 } from '../src/services/subscriptionService.js'
@@ -15,6 +17,9 @@ const INVALID_REST_ID = 'invalid-uuid-123'
 
 describe('subscriptionService Unit Tests', () => {
   let originalFrom
+  const proto = Object.getPrototypeOf(supabase)
+  const originalFunctionsDescriptor = Object.getOwnPropertyDescriptor(proto, 'functions') ||
+    Object.getOwnPropertyDescriptor(supabase, 'functions')
 
   beforeEach(() => {
     originalFrom = supabase.from
@@ -22,6 +27,10 @@ describe('subscriptionService Unit Tests', () => {
 
   afterEach(() => {
     supabase.from = originalFrom
+    if (originalFunctionsDescriptor) {
+      Object.defineProperty(proto, 'functions', originalFunctionsDescriptor)
+      delete supabase.functions
+    }
   })
 
   describe('fetchFaturas', () => {
@@ -280,6 +289,160 @@ describe('subscriptionService Unit Tests', () => {
     })
   })
 
+  describe('createSubscription', () => {
+    test('rejeita payload inválido ou sem campos obrigatórios', async () => {
+      const res1 = await createSubscription(null)
+      assert.equal(res1.data, null)
+      assert.notEqual(res1.error, null)
+
+      const res2 = await createSubscription({ cliente: { nome: 'João' } })
+      assert.equal(res2.data, null)
+      assert.match(res2.error.message, /e-mail/i)
+
+      const res3 = await createSubscription({ cliente: { email: 'joao@teste.com' } })
+      assert.equal(res3.data, null)
+      assert.match(res3.error.message, /cartão/i)
+    })
+
+    test('invoca Edge Function create-subscription com sucesso quando online', async () => {
+      const mockResult = {
+        success: true,
+        restauranteId: VALID_REST_ID,
+        status: 'trialing',
+        dataFimTrial: '2026-09-06T00:00:00.000Z',
+        asaasSubscriptionId: 'sub_live_123'
+      }
+
+      Object.defineProperty(supabase, 'functions', {
+        value: {
+          invoke: (fnName, options) => {
+            assert.equal(fnName, 'create-subscription')
+            assert.equal(options.body.plano, 'pro')
+            return Promise.resolve({ data: mockResult, error: null })
+          }
+        },
+        configurable: true,
+        writable: true
+      })
+
+      const res = await createSubscription({
+        cliente: { email: 'chef@restaurante.com', nome: 'Chef' },
+        cartao: { number: '4111111111111111', expiryMonth: '12', expiryYear: '2030', ccv: '123' },
+        plano: 'pro',
+        restauranteId: VALID_REST_ID
+      })
+
+      assert.equal(res.error, null)
+      assert.equal(res.data.success, true)
+      assert.equal(res.data.status, 'trialing')
+      assert.equal(res.isMock, false)
+    })
+
+    test('utiliza fallback mock se Edge Function falhar ou estiver offline', async () => {
+      Object.defineProperty(supabase, 'functions', {
+        value: {
+          invoke: () => Promise.resolve({ data: null, error: new Error('Network error / Functions offline') })
+        },
+        configurable: true,
+        writable: true
+      })
+
+      supabase.from = (table) => {
+        assert.equal(table, 'restaurantes')
+        return {
+          update: (payload) => {
+            assert.equal(payload.status_assinatura, 'trialing')
+            assert.equal(payload.plano, 'scale')
+            return {
+              eq: () => ({
+                select: () => ({
+                  single: () => Promise.resolve({ data: { id: VALID_REST_ID, ...payload }, error: null })
+                })
+              })
+            }
+          }
+        }
+      }
+
+      const res = await createSubscription({
+        cliente: { email: 'admin@scale.com', nome: 'Admin' },
+        cartao: { number: '5555444433332222', expiryMonth: '10', expiryYear: '2028', ccv: '999' },
+        plano: 'scale',
+        restauranteId: VALID_REST_ID
+      })
+
+      assert.equal(res.error, null)
+      assert.equal(res.data.success, true)
+      assert.equal(res.data.status, 'trialing')
+      assert.equal(res.data.plano, 'scale')
+      assert.equal(res.data.cartao.ultimosDigitos, '2222')
+      assert.equal(res.isMock, true)
+    })
+  })
+
+  describe('cancelSubscription', () => {
+    test('rejeita cancelamento com restauranteId inválido', async () => {
+      const res = await cancelSubscription(INVALID_REST_ID)
+      assert.equal(res.data, null)
+      assert.notEqual(res.error, null)
+    })
+
+    test('invoca Edge Function cancel-subscription com sucesso quando online', async () => {
+      Object.defineProperty(supabase, 'functions', {
+        value: {
+          invoke: (fnName, options) => {
+            assert.equal(fnName, 'cancel-subscription')
+            assert.equal(options.body.restauranteId, VALID_REST_ID)
+            return Promise.resolve({
+              data: { success: true, restauranteId: VALID_REST_ID, status: 'canceled' },
+              error: null
+            })
+          }
+        },
+        configurable: true,
+        writable: true
+      })
+
+      const res = await cancelSubscription(VALID_REST_ID, 'Mudança de negócio')
+      assert.equal(res.error, null)
+      assert.equal(res.data.success, true)
+      assert.equal(res.data.status, 'canceled')
+      assert.equal(res.isMock, false)
+    })
+
+    test('utiliza fallback mock para cancelamento se Edge Function estiver offline', async () => {
+      Object.defineProperty(supabase, 'functions', {
+        value: {
+          invoke: () => Promise.resolve({ data: null, error: new Error('Functions offline') })
+        },
+        configurable: true,
+        writable: true
+      })
+
+      supabase.from = (table) => {
+        assert.equal(table, 'restaurantes')
+        return {
+          update: (payload) => {
+            assert.equal(payload.status_assinatura, 'canceled')
+            return {
+              eq: () => ({
+                select: () => ({
+                  single: () => Promise.resolve({ data: { id: VALID_REST_ID, status_assinatura: 'canceled' }, error: null })
+                })
+              })
+            }
+          }
+        }
+      }
+
+      const res = await cancelSubscription(VALID_REST_ID)
+      assert.equal(res.error, null)
+      assert.equal(res.data.success, true)
+      assert.equal(res.data.status, 'canceled')
+      assert.equal(res.isMock, true)
+    })
+  })
+
   describe('Constantes e Configurações de Planos', () => {
     test('PLANS_CONFIG possui os planos previstos no PRD/Story', () => {
       assert.ok(PLANS_CONFIG.starter)
@@ -298,3 +461,4 @@ describe('subscriptionService Unit Tests', () => {
     })
   })
 })
+

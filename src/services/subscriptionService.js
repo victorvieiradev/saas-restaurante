@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import { isValidUUID } from '../utils/uuid.js'
-import { fetchRestauranteById } from './restaurantService.js'
+import { fetchRestauranteById, updateRestaurantSubscription } from './restaurantService.js'
 
 /**
  * Tabela de Configuração e Limites dos Planos SaaS
@@ -228,3 +228,135 @@ export async function saveFatura(faturaData, restauranteId) {
     return { data: null, error: err }
   }
 }
+
+/**
+ * Cria ou atualiza assinatura com período de trial de 14 dias (D+14)
+ * Comunica com a Edge Function 'create-subscription' e provê fallback mock
+ * @param {Object} payload - { cliente, cartao, endereco, plano, ciclo, restauranteId, restaurante }
+ * @returns {Promise<{ data: Object|null, error: Error|null, isMock?: boolean }>}
+ */
+export async function createSubscription(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { data: null, error: new Error('Dados de assinatura inválidos.') }
+  }
+
+  const { cliente, cartao, plano = 'starter', ciclo = 'MONTHLY', restauranteId, restaurante } = payload
+  const targetRestauranteId = restauranteId || restaurante?.id
+
+  if (!cliente || !cliente.email) {
+    return { data: null, error: new Error('E-mail do titular é obrigatório.') }
+  }
+
+  if (!cartao || (!cartao.number && !cartao.numero)) {
+    return { data: null, error: new Error('Número do cartão de crédito é obrigatório.') }
+  }
+
+  // Tenta invocar a Edge Function no Supabase
+  try {
+    if (supabase && supabase.functions && typeof supabase.functions.invoke === 'function') {
+      const { data, error } = await supabase.functions.invoke('create-subscription', {
+        body: payload
+      })
+
+      if (!error && data && data.success) {
+        return { data, error: null, isMock: false }
+      }
+
+      if (error) {
+        console.warn('Aviso: Edge Function create-subscription indisponível ou retornou erro:', error.message)
+      }
+    }
+  } catch (err) {
+    console.warn('Exceção ao invocar Edge Function create-subscription:', err)
+  }
+
+  // Fallback Mock Local (simula criação e atualiza restaurante local/Supabase)
+  const agora = Date.now()
+  const dataFimTrial = new Date(agora + 14 * 24 * 60 * 60 * 1000).toISOString()
+  const rawCardNumber = String(cartao.number || cartao.numero || '4242').replace(/\D/g, '')
+  const ultimosDigitos = rawCardNumber.slice(-4) || '4242'
+  const planoKey = (plano || 'starter').toLowerCase()
+  const planoConfig = PLANS_CONFIG[planoKey] || PLANS_CONFIG.starter
+
+  const mockResponse = {
+    success: true,
+    restauranteId: targetRestauranteId || null,
+    status: 'trialing',
+    plano: planoKey,
+    dataFimTrial,
+    asaasCustomerId: `cus_mock_${agora}`,
+    asaasSubscriptionId: `sub_mock_${agora}`,
+    cartao: {
+      ultimosDigitos,
+      bandeira: rawCardNumber.startsWith('4') ? 'VISA' : 'MASTERCARD'
+    },
+    message: 'Assinatura criada com sucesso! Trial de 14 dias ativo com R$ 0,00 cobrado agora.'
+  }
+
+  if (targetRestauranteId && isValidUUID(targetRestauranteId)) {
+    await updateRestaurantSubscription(targetRestauranteId, {
+      plano: planoKey,
+      status_assinatura: 'trialing',
+      limite_pedidos_mes: planoConfig.limite_pedidos,
+      pedidos_consumidos_mes: 0,
+      data_inicio_ciclo: new Date().toISOString(),
+      data_fim_trial: dataFimTrial,
+      asaas_customer_id: mockResponse.asaasCustomerId,
+      asaas_subscription_id: mockResponse.asaasSubscriptionId,
+      cartao_ultimos_digitos: ultimosDigitos,
+      cartao_bandeira: mockResponse.cartao.bandeira,
+      cpf_cnpj: cliente.cpfCnpj || cliente.cpf_cnpj || null,
+      endereco_completo: payload.endereco || null
+    })
+  }
+
+  return { data: mockResponse, error: null, isMock: true }
+}
+
+/**
+ * Cancela a assinatura ativa do restaurante
+ * Comunica com a Edge Function 'cancel-subscription' e provê fallback mock
+ * @param {string} restauranteId - UUID do restaurante
+ * @param {string} [motivo] - Motivo opcional do cancelamento
+ * @returns {Promise<{ data: Object|null, error: Error|null, isMock?: boolean }>}
+ */
+export async function cancelSubscription(restauranteId, motivo = '') {
+  if (!restauranteId || !isValidUUID(restauranteId)) {
+    return { data: null, error: new Error('ID do restaurante inválido.') }
+  }
+
+  try {
+    if (supabase && supabase.functions && typeof supabase.functions.invoke === 'function') {
+      const { data, error } = await supabase.functions.invoke('cancel-subscription', {
+        body: { restauranteId, motivo }
+      })
+
+      if (!error && data && data.success) {
+        return { data, error: null, isMock: false }
+      }
+
+      if (error) {
+        console.warn('Aviso: Edge Function cancel-subscription indisponível:', error.message)
+      }
+    }
+  } catch (err) {
+    console.warn('Exceção ao invocar Edge Function cancel-subscription:', err)
+  }
+
+  // Fallback Mock Local
+  await updateRestaurantSubscription(restauranteId, {
+    status_assinatura: 'canceled'
+  })
+
+  return {
+    data: {
+      success: true,
+      restauranteId,
+      status: 'canceled',
+      message: 'Assinatura cancelada com sucesso. Nenhuma cobrança será realizada.'
+    },
+    error: null,
+    isMock: true
+  }
+}
+

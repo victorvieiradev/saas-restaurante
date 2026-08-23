@@ -44,8 +44,28 @@
   - `pedidos`
   - `itens_pedido`
   - `comandas`
+  - `faturas`
+
+---
+
+### 5. 💳 Edge Functions & Secrets do Asaas (Gestão de Assinaturas)
+- [ ] Configurar os Secrets das Edge Functions no Supabase CLI ou Dashboard (**Settings** ➔ **Edge Functions** / Secrets):
+  - `ASAAS_API_URL` = `https://sandbox.asaas.com/api/v3` *(ou `https://api.asaas.com/v3` em produção)*
+  - `ASAAS_API_KEY` = `$`*(sua chave de API do Asaas)*
+  - `ASAAS_WEBHOOK_SECRET` = `$`*(token de autenticação configurado no webhook do Asaas)*
+  - `SUPABASE_SERVICE_ROLE_KEY` = `$`*(chave service_role do Supabase)*
+- [ ] Fazer o deploy das Edge Functions via Supabase CLI:
+  ```bash
+  supabase functions deploy create-subscription
+  supabase functions deploy cancel-subscription
+  supabase functions deploy asaas-webhook
+  ```
+- [ ] Cadastrar a URL do Webhook no painel do Asaas:
+  - **URL:** `https://<seu-id-supabase>.supabase.co/functions/v1/asaas-webhook`
+  - **Eventos:** `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `SUBSCRIPTION_DELETED`
+  - **Token de Autenticação:** mesmo valor definido em `ASAAS_WEBHOOK_SECRET`
 
 ---
 
 > [!TIP]
-> Caso alguma variável ou configuração esteja pendente, o aplicativo continuará funcional no modo de demonstração local (*LocalStorage*). Assim que o Supabase estiver 100% configurado, a persistência na nuvem e o KDS em tempo real passam a operar automaticamente.
+> Caso alguma variável ou configuração esteja pendente, o aplicativo continuará funcional no modo de demonstração local (*LocalStorage* / Mocks). Assim que o Supabase estiver 100% configurado, a persistência na nuvem e as Edge Functions passam a operar automaticamente.
