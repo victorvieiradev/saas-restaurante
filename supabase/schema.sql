@@ -28,6 +28,18 @@ CREATE TABLE IF NOT EXISTS restaurantes (
     nome VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
+    plano VARCHAR(50) DEFAULT 'starter',
+    status_assinatura VARCHAR(30) DEFAULT 'trialing',
+    limite_pedidos_mes INT DEFAULT 300,
+    pedidos_consumidos_mes INT DEFAULT 0,
+    data_inicio_ciclo TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    data_fim_trial TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '14 days'),
+    asaas_customer_id VARCHAR(100),
+    asaas_subscription_id VARCHAR(100),
+    cartao_ultimos_digitos VARCHAR(4),
+    cartao_bandeira VARCHAR(30),
+    cpf_cnpj VARCHAR(20),
+    endereco_completo JSONB,
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -109,6 +121,22 @@ CREATE TABLE IF NOT EXISTS usuarios_restaurante (
     criado_em TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 10. TABELA FATURAS (Histórico de Faturamento / SaaS)
+CREATE TABLE IF NOT EXISTS faturas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    restaurante_id UUID NOT NULL REFERENCES restaurantes(id) ON DELETE CASCADE,
+    asaas_payment_id VARCHAR(100) UNIQUE,
+    valor NUMERIC(10, 2) NOT NULL,
+    forma_pagamento VARCHAR(50) DEFAULT 'CREDIT_CARD',
+    status VARCHAR(30) NOT NULL,
+    url_fatura TEXT,
+    url_comprovante TEXT,
+    data_vencimento DATE,
+    data_pagamento TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ÍNDICES DE DESEMPENHO
 CREATE INDEX IF NOT EXISTS idx_usuarios_restaurante_email ON usuarios_restaurante(email);
 CREATE INDEX IF NOT EXISTS idx_usuarios_restaurante_restaurante ON usuarios_restaurante(restaurante_id);
@@ -118,12 +146,35 @@ CREATE INDEX IF NOT EXISTS idx_comandas_token ON comandas(qr_code_token);
 CREATE INDEX IF NOT EXISTS idx_comandas_restaurante ON comandas(restaurante_id);
 CREATE INDEX IF NOT EXISTS idx_produtos_restaurante ON produtos(restaurante_id);
 CREATE INDEX IF NOT EXISTS idx_categorias_restaurante ON categorias(restaurante_id);
+CREATE INDEX IF NOT EXISTS idx_faturas_restaurante ON faturas(restaurante_id);
+CREATE INDEX IF NOT EXISTS idx_faturas_asaas_payment ON faturas(asaas_payment_id);
+CREATE INDEX IF NOT EXISTS idx_faturas_status ON faturas(status);
 
--- 10. CONFIGURAÇÃO SUPABASE REALTIME (KDS & Caixa POS)
+-- 11. FUNÇÃO E TRIGGER DE CONTAGEM DE PEDIDOS
+CREATE OR REPLACE FUNCTION incrementar_pedidos_restaurante()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.restaurante_id IS NOT NULL THEN
+        UPDATE restaurantes
+        SET pedidos_consumidos_mes = COALESCE(pedidos_consumidos_mes, 0) + 1
+        WHERE id = NEW.restaurante_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_incrementa_pedido ON pedidos;
+CREATE TRIGGER trigger_incrementa_pedido
+AFTER INSERT ON pedidos
+FOR EACH ROW
+EXECUTE FUNCTION incrementar_pedidos_restaurante();
+
+-- 12. CONFIGURAÇÃO SUPABASE REALTIME (KDS, Caixa POS & Faturas)
 -- Habilita o envio de alterações de banco em tempo real via WebSockets
 ALTER TABLE pedidos REPLICA IDENTITY FULL;
 ALTER TABLE comandas REPLICA IDENTITY FULL;
 ALTER TABLE pagamentos REPLICA IDENTITY FULL;
+ALTER TABLE faturas REPLICA IDENTITY FULL;
 
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE pedidos;
@@ -140,7 +191,12 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;
 
--- 11. HABILITAR ROW LEVEL SECURITY (RLS)
+DO $$ BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE faturas;
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+-- 13. HABILITAR ROW LEVEL SECURITY (RLS)
 ALTER TABLE restaurantes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categorias ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
@@ -149,8 +205,9 @@ ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE itens_pedido ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pagamentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios_restaurante ENABLE ROW LEVEL SECURITY;
+ALTER TABLE faturas ENABLE ROW LEVEL SECURITY;
 
--- 12. POLÍTICAS DE ACESSO (RLS Policies)
+-- 14. POLÍTICAS DE ACESSO (RLS Policies)
 
 -- Restaurantes
 DO $$ BEGIN
@@ -238,3 +295,15 @@ DO $$ BEGIN
     CREATE POLICY "usuarios_restaurante_all_manage" ON usuarios_restaurante FOR ALL USING (true);
 EXCEPTION WHEN duplicate_object THEN null;
 END $$;
+
+-- Faturas (SaaS Invoices)
+DO $$ BEGIN
+    CREATE POLICY "faturas_public_read" ON faturas FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE POLICY "faturas_all_manage" ON faturas FOR ALL USING (true);
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+

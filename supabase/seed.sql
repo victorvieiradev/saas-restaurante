@@ -4,9 +4,36 @@
 -- ==============================================================================
 
 -- 1. RESTAURANTE DEMO
-INSERT INTO restaurantes (id, nome, slug, email)
-VALUES ('a0000000-0000-0000-0000-000000000001', 'Restaurante Sabor & Arte', 'sabor-arte', 'admin@restaurante.com')
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO restaurantes (
+    id,
+    nome,
+    slug,
+    email,
+    plano,
+    status_assinatura,
+    limite_pedidos_mes,
+    pedidos_consumidos_mes,
+    data_inicio_ciclo,
+    data_fim_trial,
+    cartao_ultimos_digitos,
+    cartao_bandeira
+)
+VALUES (
+    'a0000000-0000-0000-0000-000000000001',
+    'Restaurante Sabor & Arte',
+    'sabor-arte',
+    'admin@restaurante.com',
+    'starter',
+    'trialing',
+    300,
+    42,
+    NOW(),
+    NOW() + INTERVAL '14 days',
+    '4242',
+    'VISA'
+)
+ON CONFLICT (id) DO UPDATE
+SET plano = EXCLUDED.plano, status_assinatura = EXCLUDED.status_assinatura, limite_pedidos_mes = EXCLUDED.limite_pedidos_mes;
 
 -- 2. USUÁRIOS DA EQUIPE (Admin Gestor, Cozinha KDS, Caixa POS)
 INSERT INTO usuarios_restaurante (id, restaurante_id, email, senha, nome, role, ativo)
@@ -52,9 +79,46 @@ ON CONFLICT (qr_code_token) DO NOTHING;
 -- ==============================================================================
 -- 6. RESTAURANTE DE TESTE (Victor)
 -- ==============================================================================
-INSERT INTO restaurantes (id, nome, slug, email, criado_em)
-VALUES ('e1000000-0000-4000-8000-000000000001', 'Bistrô & Grill do Victor', 'bistro-do-victor', 'victor@victor.com', NOW())
-ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, slug = EXCLUDED.slug, email = EXCLUDED.email;
+INSERT INTO restaurantes (
+    id,
+    nome,
+    slug,
+    email,
+    plano,
+    status_assinatura,
+    limite_pedidos_mes,
+    pedidos_consumidos_mes,
+    data_inicio_ciclo,
+    data_fim_trial,
+    cartao_ultimos_digitos,
+    cartao_bandeira,
+    criado_em
+)
+VALUES (
+    'e1000000-0000-4000-8000-000000000001',
+    'Bistrô & Grill do Victor',
+    'bistro-do-victor',
+    'victor@victor.com',
+    'starter',
+    'trialing',
+    300,
+    15,
+    NOW(),
+    NOW() + INTERVAL '14 days',
+    '8888',
+    'MASTERCARD',
+    NOW()
+)
+ON CONFLICT (id) DO UPDATE 
+SET nome = EXCLUDED.nome, slug = EXCLUDED.slug, email = EXCLUDED.email, plano = EXCLUDED.plano, status_assinatura = EXCLUDED.status_assinatura;
+
+-- 7. FATURAS INICIAIS DE DEMONSTRAÇÃO
+INSERT INTO faturas (id, restaurante_id, asaas_payment_id, valor, forma_pagamento, status, url_fatura, url_comprovante, data_vencimento, data_pagamento, created_at)
+VALUES
+    ('f0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'pay_demo_seed_001', 97.00, 'CREDIT_CARD', 'CONFIRMED', 'https://asaas.com/i/seed001', 'https://asaas.com/c/seed001', CURRENT_DATE - INTERVAL '30 days', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days'),
+    ('f0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'pay_demo_seed_002', 97.00, 'CREDIT_CARD', 'RECEIVED', 'https://asaas.com/i/seed002', 'https://asaas.com/c/seed002', CURRENT_DATE, NOW(), NOW())
+ON CONFLICT (asaas_payment_id) DO NOTHING;
+
 
 INSERT INTO usuarios_restaurante (id, restaurante_id, email, senha, nome, role, ativo, criado_em)
 VALUES 

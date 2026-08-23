@@ -1,11 +1,11 @@
 /**
- * Utilitários para validação e geração de UUID v4
- * Garante que apenas identificadores compatíveis com o PostgreSQL sejam enviados ao Supabase.
+ * Utilitarios para validacao e geracao de UUID
+ * Garante que apenas identificadores compativeis com o PostgreSQL sejam enviados ao Supabase.
  */
 
 export function isValidUUID(id) {
   if (!id || typeof id !== 'string') return false
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   return uuidRegex.test(id.trim())
 }
 
