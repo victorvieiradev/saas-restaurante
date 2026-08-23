@@ -74,7 +74,7 @@ development_status:
   7-1-modelagem-de-dados-de-assinatura-faturas-triggers-de-pedidos: done
   7-2-supabase-edge-functions-de-cobranca-asaas: done
   7-3-frontend-wizard-de-onboarding-checkout-com-cartao: done
-  7-4-frontend-painel-de-gestao-de-assinatura-cancelamento-e-faturas: ready-for-dev
+  7-4-frontend-painel-de-gestao-de-assinatura-cancelamento-e-faturas: done
   7-5-gestao-e-alerta-de-limites-de-pedidos-do-plano: ready-for-dev
   epic-7-retrospective: optional
 

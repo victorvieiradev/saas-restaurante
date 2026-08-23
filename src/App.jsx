@@ -333,6 +333,16 @@ export default function App() {
               }
             />
 
+            {/* Rota Assinatura & Faturamento (Estritamente GESTOR) - AC1 */}
+            <Route
+              path="/admin/assinatura"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.GESTOR]}>
+                  <AdminDashboard defaultTab="subscription" />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Fallback de rotas desconhecidas: Landing Page */}
             <Route path="*" element={<LandingPage />} />
           </Routes>

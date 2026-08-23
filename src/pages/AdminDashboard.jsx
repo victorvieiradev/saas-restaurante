@@ -5,6 +5,7 @@ import CategoryManager from '../components/admin/CategoryManager'
 import ProductManager from '../components/admin/ProductManager'
 import ComandaManager from '../components/admin/ComandaManager'
 import TeamManager from '../components/admin/TeamManager'
+import AdminAssinaturaTab from '../components/admin/AdminAssinaturaTab'
 import { fetchCategorias, fetchProdutos } from '../services/menuService'
 import { fetchComandas } from '../services/comandaService'
 import { fetchUsuariosEquipe } from '../services/userService'
@@ -28,10 +29,19 @@ import {
   CreditCard
 } from 'lucide-react'
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ defaultTab }) {
   const { user, userProfile, role, isAdmin, restaurante, signOut } = useAuth()
   const location = useLocation()
-  const [activeTab, setActiveTab] = useState('overview') // 'overview', 'categories', 'products', 'comandas', 'team'
+  const initialTab = defaultTab || (location.pathname === '/admin/assinatura' ? 'subscription' : (location.state?.tab || 'overview'))
+  const [activeTab, setActiveTab] = useState(initialTab) // 'overview', 'categories', 'products', 'comandas', 'team', 'subscription'
+
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab)
+    } else if (location.pathname === '/admin/assinatura') {
+      setActiveTab('subscription')
+    }
+  }, [defaultTab, location.pathname])
 
   const [welcomeBanner, setWelcomeBanner] = useState(null)
 
@@ -76,7 +86,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadStats()
-  }, [restaurante?.id, activeTab])
+  }, [restaurante?.id])
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
@@ -92,7 +102,7 @@ export default function AdminDashboard() {
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-extrabold text-[11px] uppercase tracking-wider">
                   Trial de 14 Dias Ativo
                 </span>
-                <span className="text-xs text-slate-400">Plano {welcomeBanner.plano.toUpperCase()}</span>
+                <span className="text-xs text-slate-400">Plano {String(welcomeBanner.plano || 'Pro').toUpperCase()}</span>
               </div>
               <h2 className="text-lg sm:text-xl font-extrabold text-white mt-1">
                 🎉 Bem-vindo ao RestauranteApp, {userProfile?.nome || 'Gestor'}!
@@ -206,6 +216,21 @@ export default function AdminDashboard() {
           >
             <Users className="w-4 h-4" />
             <span>Equipe ({stats.teamCount})</span>
+          </button>
+        )}
+
+        {/* Aba Assinatura & Faturamento (Exclusiva para Gestor - AC1) */}
+        {(isAdmin || role === 'GESTOR' || !role) && (
+          <button
+            onClick={() => setActiveTab('subscription')}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              activeTab === 'subscription'
+                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Assinatura & Faturamento</span>
           </button>
         )}
       </div>
@@ -354,6 +379,31 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
+
+            {/* Card: Assinatura & Plano (AC1, AC2) */}
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 text-xs font-semibold mb-2 border border-purple-500/20">
+                  <Sparkles className="w-3 h-3" />
+                  <span>SaaS & Faturas</span>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">Plano & Assinatura</h3>
+                <p className="text-slate-400 text-sm">
+                  Acompanhe dias de teste gratuito, dados do cartão, cancelamento e faturas emitidas.
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => setActiveTab('subscription')}
+                  className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Gerenciar Assinatura &rarr;
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -372,6 +422,10 @@ export default function AdminDashboard() {
 
       {activeTab === 'team' && (
         <TeamManager restauranteId={restaurante?.id} />
+      )}
+
+      {activeTab === 'subscription' && (
+        <AdminAssinaturaTab restauranteId={restaurante?.id} />
       )}
     </div>
   )

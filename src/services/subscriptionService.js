@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import { isValidUUID } from '../utils/uuid.js'
 import { fetchRestauranteById, updateRestaurantSubscription } from './restaurantService.js'
+import { detectCardBrand } from '../utils/validators.js'
 
 /**
  * Tabela de Configuração e Limites dos Planos SaaS
@@ -296,7 +297,7 @@ export async function createSubscription(payload) {
     asaasSubscriptionId: `sub_mock_${agora}`,
     cartao: {
       ultimosDigitos,
-      bandeira: rawCardNumber.startsWith('4') ? 'VISA' : 'MASTERCARD'
+      bandeira: detectCardBrand(rawCardNumber) || (rawCardNumber.startsWith('4') ? 'VISA' : 'MASTERCARD')
     },
     message: 'Assinatura criada com sucesso! Trial de 14 dias ativo com R$ 0,00 cobrado agora.'
   }
@@ -352,9 +353,13 @@ export async function cancelSubscription(restauranteId, motivo = '') {
   }
 
   // Fallback Mock Local
-  await updateRestaurantSubscription(restauranteId, {
+  const res = await updateRestaurantSubscription(restauranteId, {
     status_assinatura: 'canceled'
   })
+
+  if (res.error) {
+    return { data: null, error: res.error }
+  }
 
   return {
     data: {
@@ -362,6 +367,122 @@ export async function cancelSubscription(restauranteId, motivo = '') {
       restauranteId,
       status: 'canceled',
       message: 'Assinatura cancelada com sucesso. Nenhuma cobrança será realizada.'
+    },
+    error: null,
+    isMock: true
+  }
+}
+
+/**
+ * Atualiza o cartão de crédito cadastrado na assinatura
+ * @param {string} restauranteId - UUID do restaurante
+ * @param {Object} cartaoData - { numero/number, nomeTitular, validade, cvv, cpfCnpj }
+ * @returns {Promise<{ data: Object|null, error: Error|null, isMock?: boolean }>}
+ */
+export async function updateCreditCard(restauranteId, cartaoData) {
+  if (!restauranteId || !isValidUUID(restauranteId)) {
+    return { data: null, error: new Error('ID do restaurante inválido.') }
+  }
+
+  if (!cartaoData || typeof cartaoData !== 'object') {
+    return { data: null, error: new Error('Dados do cartão de crédito incompletos ou inválidos.') }
+  }
+
+  const rawCardNumber = String(cartaoData.numero || cartaoData.number || '').replace(/\D/g, '')
+  if (rawCardNumber.length < 13) {
+    return { data: null, error: new Error('Número do cartão de crédito incompleto ou inválido.') }
+  }
+
+  const ultimosDigitos = rawCardNumber.slice(-4)
+  const bandeira = detectCardBrand(rawCardNumber) || (rawCardNumber.startsWith('4') ? 'VISA' : 'MASTERCARD')
+
+  try {
+    if (supabase && supabase.functions && typeof supabase.functions.invoke === 'function') {
+      const { data, error } = await supabase.functions.invoke('update-card', {
+        body: { restauranteId, cartao: cartaoData }
+      })
+
+      if (!error && data && data.success) {
+        return { data, error: null, isMock: false }
+      }
+    }
+  } catch (err) {
+    console.warn('Exceção ao atualizar cartão via Edge Function:', err)
+  }
+
+  // Fallback Mock Local / Supabase Direct Update
+  const updatePayload = {
+    cartao_ultimos_digitos: ultimosDigitos,
+    cartao_bandeira: bandeira
+  }
+
+  const res = await updateRestaurantSubscription(restauranteId, updatePayload)
+  if (res.error) {
+    return { data: null, error: res.error }
+  }
+
+  return {
+    data: {
+      success: true,
+      restauranteId,
+      cartao: {
+        ultimosDigitos,
+        bandeira
+      },
+      message: 'Cartão de crédito atualizado com sucesso.'
+    },
+    error: null,
+    isMock: true
+  }
+}
+
+/**
+ * Reativa a assinatura de um restaurante cancelado
+ * @param {string} restauranteId - UUID do restaurante
+ * @param {Object} [options] - { plano, ciclo }
+ * @returns {Promise<{ data: Object|null, error: Error|null, isMock?: boolean }>}
+ */
+export async function reactivateSubscription(restauranteId, options = {}) {
+  if (!restauranteId || !isValidUUID(restauranteId)) {
+    return { data: null, error: new Error('ID do restaurante inválido.') }
+  }
+
+  const planoKey = (options?.plano || 'pro').toLowerCase()
+  const planoConfig = PLANS_CONFIG[planoKey] || PLANS_CONFIG.pro
+
+  try {
+    if (supabase && supabase.functions && typeof supabase.functions.invoke === 'function') {
+      const { data, error } = await supabase.functions.invoke('reactivate-subscription', {
+        body: { restauranteId, plano: planoKey, ciclo: options?.ciclo || 'MONTHLY' }
+      })
+
+      if (!error && data && data.success) {
+        return { data, error: null, isMock: false }
+      }
+    }
+  } catch (err) {
+    console.warn('Exceção ao invocar Edge Function reactivate-subscription:', err)
+  }
+
+  const payload = {
+    status_assinatura: 'active',
+    plano: planoKey,
+    limite_pedidos_mes: planoConfig.limite_pedidos,
+    data_inicio_ciclo: new Date().toISOString()
+  }
+
+  const res = await updateRestaurantSubscription(restauranteId, payload)
+  if (res.error) {
+    return { data: null, error: res.error }
+  }
+
+  return {
+    data: {
+      success: true,
+      restauranteId,
+      status: 'active',
+      plano: planoKey,
+      message: 'Assinatura reativada com sucesso!'
     },
     error: null,
     isMock: true
