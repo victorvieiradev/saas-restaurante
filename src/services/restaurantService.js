@@ -171,3 +171,83 @@ export async function updateRestaurantSubscription(restauranteId, subscriptionDa
     return { data: null, error: err }
   }
 }
+
+/**
+ * Cadastra um novo restaurante com período de trial de 14 dias
+ * @param {Object} restauranteData - { nome, email, slug, cpf_cnpj, endereco_completo, plano, telefone }
+ * @returns {Promise<{ data: Object|null, error: Error|null, isMock?: boolean }>}
+ */
+export async function createRestaurante(restauranteData) {
+  if (!restauranteData || typeof restauranteData !== 'object') {
+    return { data: null, error: new Error('Dados do restaurante inválidos.') }
+  }
+
+  const { nome, email, slug, cpf_cnpj, endereco_completo, plano = 'starter', telefone } = restauranteData
+
+  if (!nome || !String(nome).trim()) {
+    return { data: null, error: new Error('Nome do restaurante é obrigatório.') }
+  }
+
+  if (!email || !String(email).trim()) {
+    return { data: null, error: new Error('E-mail de contato é obrigatório.') }
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase()
+  const cleanName = String(nome).trim()
+  const cleanSlug = slug ? String(slug).trim().toLowerCase() : cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-')
+
+  const dataFimTrial = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+  const dataInicioCiclo = new Date().toISOString()
+  const planoKey = (plano || 'starter').toLowerCase()
+
+  const defaultLimits = {
+    starter: 300,
+    pro: 1200,
+    scale: 3500,
+    enterprise: null
+  }
+
+  const payload = {
+    nome: cleanName,
+    slug: cleanSlug,
+    email: cleanEmail,
+    plano: planoKey,
+    status_assinatura: 'trialing',
+    limite_pedidos_mes: defaultLimits[planoKey] !== undefined ? defaultLimits[planoKey] : 300,
+    pedidos_consumidos_mes: 0,
+    data_inicio_ciclo: dataInicioCiclo,
+    data_fim_trial: dataFimTrial,
+    cpf_cnpj: cpf_cnpj || null,
+    endereco_completo: endereco_completo || null
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('restaurantes')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (!error && data) {
+      return { data, error: null, isMock: false }
+    }
+
+    if (error) {
+      console.warn('Aviso ao inserir restaurante no Supabase:', error.message)
+    }
+  } catch (err) {
+    console.warn('Exceção ao criar restaurante no Supabase:', err)
+  }
+
+  // Fallback mock para desenvolvimento / offline
+  const mockId = `r${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const mockCreated = {
+    id: mockId,
+    ...payload,
+    telefone: telefone || null,
+    criado_em: dataInicioCiclo
+  }
+
+  return { data: mockCreated, error: null, isMock: true }
+}
+

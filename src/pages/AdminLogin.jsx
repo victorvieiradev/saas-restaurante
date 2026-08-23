@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getDefaultPathForRole } from '../utils/rbac'
 import { Lock, Mail, ShieldCheck, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
@@ -143,6 +143,14 @@ export default function AdminLogin() {
               )}
             </button>
           </form>
+
+          {/* Link para Criar Conta / Onboarding */}
+          <div className="pt-4 border-t border-slate-800/80 text-center text-xs text-slate-400">
+            Ainda não tem uma conta?{' '}
+            <Link to="/onboarding" className="text-orange-400 font-bold hover:text-orange-300 transition-colors">
+              Iniciar Teste Grátis de 14 Dias &rarr;
+            </Link>
+          </div>
         </div>
       </div>
     </div>

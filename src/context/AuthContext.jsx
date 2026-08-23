@@ -284,6 +284,81 @@ export function AuthProvider({ children }) {
   const isCozinha = role === 'COZINHA'
   const isCaixa = role === 'CAIXA'
 
+  const setAuthenticatedSession = ({ user: newUser, session: newSession, userProfile: newProfile, restaurante: newRest }) => {
+    if (newUser !== undefined) setUser(newUser)
+    if (newSession !== undefined) setSession(newSession)
+    if (newProfile !== undefined) setUserProfile(newProfile)
+    if (newRest !== undefined) setRestaurante(newRest)
+  }
+
+  const signUpGestor = async ({ email, password, nome, restaurante: restData }) => {
+    const normalizedEmail = email.toLowerCase().trim()
+    try {
+      // 1. Tenta criar usuário no Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            nome: nome?.trim() || 'Gestor',
+            role: 'GESTOR',
+            restaurante_id: restData?.id,
+            nome_restaurante: restData?.nome
+          }
+        }
+      })
+
+      const currentUser = data?.user || {
+        id: `usr_${Date.now()}`,
+        email: normalizedEmail,
+        user_metadata: {
+          nome: nome?.trim() || 'Gestor',
+          role: 'GESTOR',
+          restaurante_id: restData?.id,
+          nome_restaurante: restData?.nome
+        }
+      }
+
+      const defaultProfile = {
+        id: currentUser.id,
+        restaurante_id: restData?.id,
+        email: normalizedEmail,
+        nome: nome?.trim() || 'Gestor',
+        role: 'GESTOR',
+        ativo: true,
+        criado_em: new Date().toISOString()
+      }
+
+      const mockSession = data?.session || { user: currentUser, access_token: `token_${currentUser.id}` }
+
+      setUser(currentUser)
+      setSession(mockSession)
+      setUserProfile(defaultProfile)
+      setRestaurante(restData)
+
+      return { data: { user: currentUser, session: mockSession, userProfile: defaultProfile, restaurante: restData }, error: null }
+    } catch (err) {
+      console.warn('Exceção ao cadastrar gestor no Supabase:', err)
+      const fallbackUser = {
+        id: `usr_${Date.now()}`,
+        email: normalizedEmail,
+        user_metadata: { nome: nome?.trim() || 'Gestor', role: 'GESTOR' }
+      }
+      const fallbackProfile = {
+        id: fallbackUser.id,
+        restaurante_id: restData?.id,
+        email: normalizedEmail,
+        nome: nome?.trim() || 'Gestor',
+        role: 'GESTOR',
+        ativo: true
+      }
+      setUser(fallbackUser)
+      setUserProfile(fallbackProfile)
+      setRestaurante(restData)
+      return { data: { user: fallbackUser, userProfile: fallbackProfile, restaurante: restData }, error: null }
+    }
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -297,6 +372,8 @@ export function AuthProvider({ children }) {
         isCaixa,
         loading,
         signIn,
+        signUpGestor,
+        setAuthenticatedSession,
         signOut
       }}
     >

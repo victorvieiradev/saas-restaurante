@@ -18,6 +18,7 @@ import ComandaCliente from './pages/ComandaCliente'
 import CozinhaKDS from './pages/CozinhaKDS'
 import CaixaPOS from './pages/CaixaPOS'
 import LandingPage from './pages/LandingPage'
+import OnboardingCheckout from './pages/OnboardingCheckout'
 import { ROLES } from './utils/rbac'
 
 // Banner de Notificação de Acesso Negado / Redirecionamento RBAC (AC1)
@@ -114,10 +115,18 @@ function Navbar() {
 
               <Link
                 to="/login"
+                className="px-3.5 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-orange-400" />
+                <span>Entrar</span>
+              </Link>
+
+              <Link
+                to="/onboarding"
                 className="px-4 py-2 rounded-xl bg-orange-500 text-white font-bold hover:bg-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5 text-xs sm:text-sm cursor-pointer"
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Entrar no Sistema</span>
+                <Sparkles className="w-4 h-4" />
+                <span>Testar 14 Dias Grátis</span>
               </Link>
             </>
           )}
@@ -277,9 +286,11 @@ export default function App() {
             {/* Rota Raiz: Landing Page de Vendas de Alta Conversão */}
             <Route path="/" element={<LandingPage />} />
 
-            {/* Rotas Públicas de Comanda e Login de Equipe */}
+            {/* Rotas Públicas de Comanda, Onboarding e Login de Equipe */}
             <Route path="/comanda/:token" element={<ComandaCliente />} />
             <Route path="/login" element={<AdminLogin />} />
+            <Route path="/onboarding" element={<OnboardingCheckout />} />
+            <Route path="/checkout" element={<OnboardingCheckout />} />
 
             {/* Rota Cozinha KDS (Permitido para GESTOR e COZINHA) - AC3 */}
             <Route
@@ -348,6 +359,7 @@ export default function App() {
                 <li><a href="/#calculadora" className="hover:text-orange-400 transition-colors">Simulador de ROI</a></li>
                 <li><a href="/#como-funciona" className="hover:text-orange-400 transition-colors">Como Funciona</a></li>
                 <li><a href="/#planos" className="hover:text-orange-400 transition-colors">Planos & Preços</a></li>
+                <li><Link to="/onboarding" className="text-orange-400 hover:text-orange-300 transition-colors font-semibold">Criar Conta (14 Dias Grátis)</Link></li>
                 <li><a href="/#faq" className="hover:text-orange-400 transition-colors">Dúvidas Frequentes</a></li>
               </ul>
             </div>

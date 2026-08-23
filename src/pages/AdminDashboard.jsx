@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import CategoryManager from '../components/admin/CategoryManager'
 import ProductManager from '../components/admin/ProductManager'
@@ -20,12 +21,29 @@ import {
   AlertCircle,
   Layers,
   Users,
-  Crown
+  Crown,
+  Sparkles,
+  X,
+  Clock,
+  CreditCard
 } from 'lucide-react'
 
 export default function AdminDashboard() {
   const { user, userProfile, role, isAdmin, restaurante, signOut } = useAuth()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('overview') // 'overview', 'categories', 'products', 'comandas', 'team'
+
+  const [welcomeBanner, setWelcomeBanner] = useState(null)
+
+  useEffect(() => {
+    if (location.state?.welcomeTrial) {
+      setWelcomeBanner({
+        plano: location.state.plano || restaurante?.plano || 'Pro',
+        dataFimTrial: location.state.dataFimTrial || '14 dias',
+        nomeRestaurante: location.state.nomeRestaurante || restaurante?.nome
+      })
+    }
+  }, [location, restaurante])
 
   const [stats, setStats] = useState({
     categoriesCount: 0,
@@ -62,6 +80,39 @@ export default function AdminDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      {/* Banner de Boas-Vindas & Status de Trial de 14 Dias (AC5) */}
+      {welcomeBanner && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-slate-900 to-slate-900 border border-emerald-500/40 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-emerald-500/10">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-extrabold text-[11px] uppercase tracking-wider">
+                  Trial de 14 Dias Ativo
+                </span>
+                <span className="text-xs text-slate-400">Plano {welcomeBanner.plano.toUpperCase()}</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-extrabold text-white mt-1">
+                🎉 Bem-vindo ao RestauranteApp, {userProfile?.nome || 'Gestor'}!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mt-0.5">
+                Seu teste grátis está ativo. Sua primeira mensalidade só ocorrerá em <strong>{welcomeBanner.dataFimTrial}</strong> e nada foi cobrado hoje (R$ 0,00).
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setWelcomeBanner(null)}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex-shrink-0 cursor-pointer self-end md:self-center"
+            title="Fechar aviso de boas-vindas"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Top Banner do Estabelecimento Autenticado */}
       <div className="p-6 md:p-8 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">

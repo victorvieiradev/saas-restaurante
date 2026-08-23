@@ -6,7 +6,8 @@ import {
   fetchRestauranteById,
   fetchRestauranteBySlug,
   updateRestaurantSubscription,
-  getMockRestaurantWithSubscription
+  getMockRestaurantWithSubscription,
+  createRestaurante
 } from '../src/services/restaurantService.js'
 
 const VALID_REST_ID = '11111111-1111-4111-8111-111111111111'
@@ -193,6 +194,79 @@ describe('restaurantService Unit Tests', () => {
       assert.equal(mock.limite_pedidos_mes, 300)
       assert.equal(typeof mock.pedidos_consumidos_mes, 'number')
       assert.ok(mock.data_fim_trial)
+    })
+  })
+
+  describe('createRestaurante', () => {
+    test('rejeita criação sem nome ou sem e-mail', async () => {
+      const res1 = await createRestaurante(null)
+      assert.equal(res1.data, null)
+      assert.notEqual(res1.error, null)
+
+      const res2 = await createRestaurante({ email: 'rest@teste.com' })
+      assert.equal(res2.data, null)
+      assert.match(res2.error.message, /nome/i)
+
+      const res3 = await createRestaurante({ nome: 'Cantina' })
+      assert.equal(res3.data, null)
+      assert.match(res3.error.message, /e-mail/i)
+    })
+
+    test('cria restaurante com trial e limites calculados no Supabase', async () => {
+      const newRest = {
+        nome: 'Pizzaria Bella',
+        email: 'bella@pizza.com',
+        plano: 'pro',
+        cpf_cnpj: '11.222.333/0001-81'
+      }
+
+      supabase.from = (table) => {
+        assert.equal(table, 'restaurantes')
+        return {
+          insert: (payload) => {
+            assert.equal(payload.nome, 'Pizzaria Bella')
+            assert.equal(payload.plano, 'pro')
+            assert.equal(payload.status_assinatura, 'trialing')
+            assert.equal(payload.limite_pedidos_mes, 1200)
+            assert.ok(payload.data_fim_trial)
+            return {
+              select: () => ({
+                single: () => Promise.resolve({ data: { id: VALID_REST_ID, ...payload }, error: null })
+              })
+            }
+          }
+        }
+      }
+
+      const res = await createRestaurante(newRest)
+      assert.equal(res.error, null)
+      assert.equal(res.data.id, VALID_REST_ID)
+      assert.equal(res.data.plano, 'pro')
+      assert.equal(res.data.status_assinatura, 'trialing')
+      assert.equal(res.data.limite_pedidos_mes, 1200)
+      assert.equal(res.isMock, false)
+    })
+
+    test('utiliza fallback mock se Supabase falhar', async () => {
+      supabase.from = () => ({
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: null, error: new Error('Network error') })
+          })
+        })
+      })
+
+      const res = await createRestaurante({
+        nome: 'Café Expresso',
+        email: 'cafe@expresso.com',
+        plano: 'starter'
+      })
+
+      assert.equal(res.error, null)
+      assert.ok(res.data.id)
+      assert.equal(res.data.nome, 'Café Expresso')
+      assert.equal(res.data.status_assinatura, 'trialing')
+      assert.equal(res.isMock, true)
     })
   })
 })

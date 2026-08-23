@@ -163,8 +163,8 @@ export const PRICING_PLANS = [
     id: 'starter',
     name: 'Starter',
     subtitle: 'Ideal para cafés, lanchonetes e pequenos bistrôs que querem começar.',
-    priceMonthly: 149,
-    priceAnnual: 119,
+    priceMonthly: 119,
+    priceAnnual: 95,
     highlight: false,
     badge: null,
     features: [
@@ -176,14 +176,14 @@ export const PRICING_PLANS = [
       'Suporte via WhatsApp em horário comercial'
     ],
     ctaText: 'Iniciar Teste de 14 Dias',
-    ctaLink: '/login'
+    ctaLink: '/onboarding?plan=starter'
   },
   {
     id: 'pro',
     name: 'Profissional',
     subtitle: 'O mais completo para restaurantes, bares e hamburguerias em crescimento.',
-    priceMonthly: 299,
-    priceAnnual: 239,
+    priceMonthly: 229,
+    priceAnnual: 183,
     highlight: true,
     badge: 'Mais Escolhido 🔥',
     features: [
@@ -196,14 +196,14 @@ export const PRICING_PLANS = [
       'Suporte prioritário 24/7 via WhatsApp e chamada'
     ],
     ctaText: 'Testar Plano Pro Grátis',
-    ctaLink: '/login'
+    ctaLink: '/onboarding?plan=pro'
   },
   {
     id: 'enterprise',
-    name: 'Enterprise / Redes',
+    name: 'Scale / Redes',
     subtitle: 'Para franquias, redes de restaurantes e operações de alta escala.',
-    priceMonthly: 599,
-    priceAnnual: 479,
+    priceMonthly: 399,
+    priceAnnual: 319,
     highlight: false,
     badge: 'Grandes Operações',
     features: [
@@ -214,8 +214,8 @@ export const PRICING_PLANS = [
       'Gerente de conta exclusivo',
       'SLA garantido de 99.9% com suporte dedicado'
     ],
-    ctaText: 'Falar com Consultor',
-    ctaLink: '/login'
+    ctaText: 'Testar Plano Scale',
+    ctaLink: '/onboarding?plan=scale'
   }
 ]
 
