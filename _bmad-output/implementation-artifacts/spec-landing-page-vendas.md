@@ -1,9 +1,10 @@
-﻿---
+---
 title: 'Landing Page de Vendas de Alta Conversão (Single Page SaaS)'
 type: 'feature'
 created: '2026-08-22T21:58:00-03:00'
-status: 'ready-for-dev'
-review_loop_iteration: 0
+status: 'done'
+baseline_commit: 'a7409b82091349fa501aaf9801e5615c9df05ba5'
+review_loop_iteration: 1
 context: []
 ---
 
@@ -46,13 +47,20 @@ context: []
 ## Code Map
 
 - `src/pages/LandingPage.jsx` -- Nova página/componente modular contendo toda a estrutura da Landing Page de Vendas (Hero, Problema/Solução, Módulos KDS/POS/QR, Gatilhos & Números, Demonstração, Planos, FAQ, CTA final).
+- `src/utils/landingPageData.js` -- Configurações, estrutura de dados dos planos/FAQ/módulos e função de cálculo de ROI.
 - `src/App.jsx` -- Atualização do roteamento da raiz `/` para utilizar o novo componente `LandingPage` e refinamento do Navbar para harmonizar com a Landing Page e os estados de autenticação.
+- `src/index.css` -- Habilitação de `scroll-behavior: smooth` para suporte nativo a rolagem suave das âncoras.
+- `test/landingPage.test.js` -- Testes unitários para cálculos de ROI, estruturas de planos, módulos e FAQs.
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/pages/LandingPage.jsx` -- Criar componente de Landing Page de Vendas completa -- Implementa layout moderno com copywriting persuasivo (Hero com chamada de impacto e mockups visuais, seção "O Caos vs A Solução", vitrine dos 4 módulos com ícones e badges, calculadora/métricas de impacto financeiro [+35% ticket médio, -70% tempo de espera], seção passo a passo "Como Funciona", tabela comparativa de planos de assinatura com CTA para contato/teste, depoimentos e FAQ interativo com accordion).
-- [ ] `src/App.jsx` -- Integrar `LandingPage` na rota `/` e ajustar Navbar -- Substitui o componente inline `Home` pelo novo `LandingPage`, mantendo a barra de navegação com logotipo, links de âncoras para seções da página, botão de login/acesso e tratamento dinâmico de usuário logado (gestor, cozinha, caixa).
+- [x] `src/pages/LandingPage.jsx` -- Criar componente de Landing Page de Vendas completa -- Implementa layout moderno com copywriting persuasivo (Hero com chamada de impacto e mockups visuais, seção "O Caos vs A Solução", vitrine dos 4 módulos com ícones e badges, calculadora/métricas de impacto financeiro [+35% ticket médio, -70% tempo de espera], seção passo a passo "Como Funciona", tabela comparativa de planos de assinatura com CTA para contato/teste, depoimentos e FAQ interativo com accordion).
+- [x] `src/App.jsx` -- Integrar `LandingPage` na rota `/` e ajustar Navbar -- Substitui o componente inline `Home` pelo novo `LandingPage`, mantendo a barra de navegação com logotipo, links de âncoras para seções da página, botão de login/acesso e tratamento dinâmico de usuário logado (gestor, cozinha, caixa).
+
+### Review Findings
+- [x] [Review][Patch] Remover imports não utilizados (`Sparkles`, `ArrowRight`) em `src/App.jsx:12`
+- [x] [Review][Patch] Sanitizar entradas negativas em `calculateRoiMetrics` em `src/utils/landingPageData.js:4`
 
 **Acceptance Criteria:**
 - Given que um usuário não autenticado acessa a URL raiz `/`, when a página carrega, then uma Landing Page de vendas visualmente rica, moderna e profissional é exibida com todas as seções comerciais e gatilhos de conversão.
@@ -64,18 +72,62 @@ context: []
 
 - **Design System & Paleta:** Fundo escuro premium (`bg-slate-950`), gradientes sutis em laranja/âmbar (`from-orange-500 to-amber-500`), bordas elegantes com brilho suave (`border-slate-800`, `shadow-orange-500/10`), tipografia nítida e contrastante.
 - **Copywriting Framework (PAS + AIDA):**
-  - **Atenção:** "Modernize seu Restaurante: Cardápios QR Code Inteligentes, KDS em Tempo Real e Fim das Filas no Caixa."
+  - **Atenção:** "Transforme suas mesas em máquinas de vendas automáticas."
   - **Problema & Agitação:** "Pedidos esquecidos, clientes impacientes esperando o garçom e erros manuais que custam caro ao seu negócio."
-  - **Solução:** "Uma experiência 100% digital onde o cliente pede pelo celular, a cozinha recebe em segundos no KDS e o caixa fecha contas sem estresse."
-  - **Ação:** CTAs destacados ("Começar Agora", "Ver Demonstração", "Falar com Especialista").
+  - **Solução:** "Uma experiência 100% digital onde o cliente pede pelo celular, a cozinha recebe em segundos no KDS com alerta sonoro e o caixa fecha contas sem estresse."
+  - **Ação:** CTAs destacados ("Iniciar Teste Grátis de 14 Dias", "Conhecer os 4 Módulos", "Entrar no Sistema").
 
 ## Verification
 
 **Commands:**
 - `npm run build` -- expected: Compilação do bundle Vite sem erros de tipagem, JSX ou CSS.
+- `npm test` -- expected: Suíte completa de testes passando 100%.
 
-**Manual checks (if no CLI):**
-- Acessar `/` no navegador e verificar a renderização de todas as seções (Hero, Recursos, Métricas, Planos, FAQ, CTA).
+**Manual checks:**
+- Acessar `/` no navegador e verificar a renderização de todas as seções (Hero, Recursos, Métricas, Simulador ROI, Como Funciona, Planos, Depoimentos, FAQ, CTA).
 - Testar a responsividade em telas mobile e desktop.
 - Clicar no botão de login da barra superior e verificar que a rota `/login` carrega perfeitamente.
 - Testar a interação do FAQ abrindo e fechando itens.
+- Testar os controles interativos da calculadora de ROI e switcher de planos mensal/anual.
+
+---
+
+## Dev Agent Record
+
+### Implementation Plan
+1. Criado módulo de dados e lógica `src/utils/landingPageData.js` contendo calculadora de ROI, catálogo dos 4 módulos, planos de assinatura com alternância mensal/anual, FAQs estruturados e depoimentos.
+2. Criada suíte de testes unitários automatizados em `test/landingPage.test.js` cobrindo o motor de cálculo de ROI, estruturas de planos e integridade das seções comerciais.
+3. Desenvolvido o componente completo `src/pages/LandingPage.jsx` com Hero interativo, vitrine de abas ao vivo dos módulos, simulador financeiro de ROI dinâmico, comparador de dor vs solução (PAS), tabela de preços transparente e sanfona de FAQs (Accordion).
+4. Atualizado `src/App.jsx` para integrar `LandingPage` na rota raiz `/` e fallback `*`, removendo o componente preliminar `Home` e configurando a `Navbar` para exibir links de âncoras para visitantes anônimos enquanto preserva integralmente os atalhos e badges RBAC para usuários autenticados.
+5. Adicionada regra `html { scroll-behavior: smooth; }` em `src/index.css` para garantir transição suave ao navegar pelas âncoras da página.
+6. Validados testes automatizados (71 testes passando, 0 falhas) e compilação do bundle de produção com Vite (`vite build`).
+
+### Completion Notes
+- ✅ **AC1:** Ao acessar a raiz `/` como visitante, a Landing Page de vendas completa é renderizada com todas as seções persuasivas (Hero, Stats, Caos vs Solução, Vitrine dos 4 Módulos, Simulador de ROI, Como Funciona, Planos, Depoimentos, FAQ e CTA).
+- ✅ **AC2:** O botão "Entrar no Sistema" e links de login no topo redirecionam para a rota `/login` (ou `/admin` se já autenticado) sem qualquer erro.
+- ✅ **AC3:** Usuários autenticados (Gestor, Cozinha ou Caixa) que acessam a home continuam visualizando a Navbar operacional correspondente ao seu papel com badges, links para seus módulos (`/cozinha`, `/caixa`, `/admin`) e botão de logout.
+- ✅ **AC4:** Links de âncora (`#recursos`, `#problema`, `#calculadora`, `#como-funciona`, `#planos`, `#faq`) funcionam com rolagem suave (`scroll-behavior: smooth`).
+- ✅ **Testes e Build:** 71/71 testes aprovados no Node test runner; bundle Vite compilado com sucesso em 4.5s.
+
+### Debug Log
+- Isolada a lógica de cálculo de ROI e estrutura de dados em `src/utils/landingPageData.js` para garantir 100% de compatibilidade tanto com o runtime de testes ES module (`node --test`) quanto com o bundle de componentes React do Vite.
+
+---
+
+## File List
+
+- `src/pages/LandingPage.jsx` (Novo)
+- `src/utils/landingPageData.js` (Novo)
+- `test/landingPage.test.js` (Novo)
+- `src/App.jsx` (Modificado)
+- `src/index.css` (Modificado)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (Modificado)
+- `_bmad-output/implementation-artifacts/spec-landing-page-vendas.md` (Modificado)
+
+---
+
+## Change Log
+
+- **2026-08-23**: Implementação completa da Landing Page de Vendas de Alta Conversão (`spec-landing-page-vendas`). Criado layout single-page moderno com copywriting AIDA/PAS, vitrine dinâmica dos 4 módulos, calculadora interativa de ROI, planos de assinatura com desconto anual, FAQ com accordion sanfona, integração da rota raiz no `App.jsx`, links de navegação na Navbar e suíte de testes unitários.
+- **2026-08-23**: Code review adversarial executado (Blind Hunter, Edge Case Hunter, Acceptance Auditor). Aplicados os 2 patches de limpeza de imports e sanitização de inputs no cálculo de ROI. Status final atualizado para `done`.
+

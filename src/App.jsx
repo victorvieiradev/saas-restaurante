@@ -4,15 +4,10 @@ import {
   ChefHat,
   Receipt,
   ShieldCheck,
-  QrCode,
-  Sparkles,
-  CheckCircle2,
   Crown,
   LogOut,
   AlertTriangle,
   X,
-  Lock,
-  ArrowRight,
   User
 } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -22,6 +17,7 @@ import AdminLogin from './pages/AdminLogin'
 import ComandaCliente from './pages/ComandaCliente'
 import CozinhaKDS from './pages/CozinhaKDS'
 import CaixaPOS from './pages/CaixaPOS'
+import LandingPage from './pages/LandingPage'
 import { ROLES } from './utils/rbac'
 
 // Banner de Notificação de Acesso Negado / Redirecionamento RBAC (AC1)
@@ -71,33 +67,59 @@ function UnauthorizedAlertBanner() {
   )
 }
 
-// Sub-componente Navbar adaptado dinamicamente ao papel RBAC (AC4)
+// Sub-componente Navbar adaptado dinamicamente ao visitante ou papel RBAC (AC3, AC4)
 function Navbar() {
   const { user, userProfile, role, isAdmin, isCozinha, isCaixa, signOut } = useAuth()
   const location = useLocation()
+  const isHomePage = location.pathname === '/'
 
   return (
-    <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <header className="border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Logotipo e Identidade */}
-        <Link to="/" className="flex items-center gap-2 font-bold text-lg text-white hover:opacity-90 transition-opacity">
-          <span className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-orange-500/20">
+        <Link to="/" className="flex items-center gap-2.5 font-bold text-lg text-white hover:opacity-90 transition-opacity">
+          <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-orange-500/25">
             R
           </span>
-          <span>Restaurante<span className="text-orange-500">App</span></span>
+          <span className="tracking-tight">
+            Restaurante<span className="text-orange-500">App</span>
+          </span>
         </Link>
 
-        {/* Links de Navegação Filtrados por Papel RBAC */}
-        <nav className="flex items-center gap-2 sm:gap-3 text-sm font-medium">
-          {/* Se deslogado: botão de login */}
+        {/* Links de Navegação Filtrados por Papel RBAC ou Visitante */}
+        <nav className="flex items-center gap-2 sm:gap-4 text-sm font-medium">
+          {/* Se deslogado: âncoras da landing page + botão de login */}
           {!user && (
-            <Link
-              to="/admin"
-              className="px-3.5 py-1.5 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span>Entrar no Sistema</span>
-            </Link>
+            <>
+              <div className="hidden md:flex items-center gap-5 text-xs lg:text-sm text-slate-300 font-medium mr-2">
+                <a href={isHomePage ? '#recursos' : '/#recursos'} className="hover:text-orange-400 transition-colors">
+                  Recursos
+                </a>
+                <a href={isHomePage ? '#problema' : '/#problema'} className="hidden lg:inline-block hover:text-orange-400 transition-colors">
+                  Diferenciais
+                </a>
+                <a href={isHomePage ? '#calculadora' : '/#calculadora'} className="hover:text-orange-400 transition-colors">
+                  Simulador ROI
+                </a>
+                <a href={isHomePage ? '#como-funciona' : '/#como-funciona'} className="hover:text-orange-400 transition-colors">
+                  Como Funciona
+                </a>
+                <a href={isHomePage ? '#planos' : '/#planos'} className="hover:text-orange-400 transition-colors">
+                  Planos
+                </a>
+                <a href={isHomePage ? '#faq' : '/#faq'} className="hidden lg:inline-block hover:text-orange-400 transition-colors">
+                  FAQ
+                </a>
+              </div>
+
+              <Link
+                to="/login"
+                className="px-4 py-2 rounded-xl bg-orange-500 text-white font-bold hover:bg-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5 text-xs sm:text-sm cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Entrar no Sistema</span>
+              </Link>
+            </>
           )}
 
           {/* Se autenticado como GESTOR: acesso completo a todos os módulos */}
@@ -239,171 +261,6 @@ function Navbar() {
   )
 }
 
-function Home() {
-  const { user, userProfile, role, isAdmin, isCozinha, isCaixa } = useAuth()
-
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
-      <div className="text-center space-y-4 mb-12">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-sm font-medium">
-          <Sparkles className="w-4 h-4" />
-          <span>Sistema de Cardápio Digital & Comandas QR Code</span>
-        </div>
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-          Controle Operacional & RBAC
-        </h1>
-        <p className="text-slate-400 max-w-2xl mx-auto text-base md:text-lg">
-          {user ? (
-            <span>
-              Você está autenticado como <strong className="text-white">{userProfile?.nome || user.email}</strong> com perfil{' '}
-              <strong className="text-orange-400">{role || 'GESTOR'}</strong>.
-            </span>
-          ) : (
-            'Selecione um dos módulos abaixo para acessar o cardápio digital ou realizar o login de equipe com controle de acesso estrito.'
-          )}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        {/* Módulo Cliente (QR Code na Mesa) */}
-        <div
-          className="p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between shadow-lg"
-        >
-          <div>
-            <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center mb-4">
-              <QrCode className="w-6 h-6" />
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-bold text-white">Módulo Cliente</h3>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">QR Code</span>
-            </div>
-            <p className="text-slate-400 text-sm mb-4">Cardápio digital acessado diretamente pelo cliente ao escanear o QR Code da mesa ou comanda.</p>
-          </div>
-          <span className="text-slate-500 text-xs font-medium flex items-center gap-1">
-            <span>Acesso via câmera / QR Code</span>
-          </span>
-        </div>
-
-        {/* Módulo Cozinha KDS (Permitido para GESTOR e COZINHA) */}
-        <Link
-          to="/cozinha"
-          className={`group p-6 rounded-2xl bg-slate-900 border transition-all duration-300 shadow-lg flex flex-col justify-between ${
-            !user || isAdmin || isCozinha
-              ? 'border-slate-800 hover:border-amber-500/50 hover:bg-slate-800/80 hover:shadow-amber-500/10'
-              : 'border-slate-800/50 opacity-60 hover:opacity-80'
-          }`}
-        >
-          <div>
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <ChefHat className="w-6 h-6" />
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-bold text-white">Módulo Cozinha</h3>
-              {user && isCaixa ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Bloqueado
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">KDS</span>
-              )}
-            </div>
-            <p className="text-slate-400 text-sm mb-4">Kanban KDS em tempo real com status de preparo e notificações WebSockets.</p>
-          </div>
-          <span className="text-amber-400 text-xs font-semibold uppercase tracking-wider group-hover:underline flex items-center gap-1">
-            <span>Acessar KDS</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </span>
-        </Link>
-
-        {/* Módulo Caixa POS (Permitido para GESTOR e CAIXA) */}
-        <Link
-          to="/caixa"
-          className={`group p-6 rounded-2xl bg-slate-900 border transition-all duration-300 shadow-lg flex flex-col justify-between ${
-            !user || isAdmin || isCaixa
-              ? 'border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/80 hover:shadow-emerald-500/10'
-              : 'border-slate-800/50 opacity-60 hover:opacity-80'
-          }`}
-        >
-          <div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Receipt className="w-6 h-6" />
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-bold text-white">Módulo Caixa</h3>
-              {user && isCozinha ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Bloqueado
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">POS</span>
-              )}
-            </div>
-            <p className="text-slate-400 text-sm mb-4">Terminal POS para consulta de consumo, fechamento e liberação de comandas.</p>
-          </div>
-          <span className="text-emerald-400 text-xs font-semibold uppercase tracking-wider group-hover:underline flex items-center gap-1">
-            <span>Acessar POS</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </span>
-        </Link>
-
-        {/* Módulo Gestor Admin (Exclusivo GESTOR) */}
-        <Link
-          to="/admin"
-          className={`group p-6 rounded-2xl bg-slate-900 border transition-all duration-300 shadow-lg flex flex-col justify-between ${
-            !user || isAdmin
-              ? 'border-slate-800 hover:border-blue-500/50 hover:bg-slate-800/80 hover:shadow-blue-500/10'
-              : 'border-slate-800/50 opacity-60 hover:opacity-80'
-          }`}
-        >
-          <div>
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Crown className="w-6 h-6" />
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xl font-bold text-white">Painel Gestor</h3>
-              {user && !isAdmin ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Restrito
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">Gestão</span>
-              )}
-            </div>
-            <p className="text-slate-400 text-sm mb-4">
-              {user && isAdmin
-                ? 'Painel administrativo completo: cardápio, comandas e gestão de equipe.'
-                : 'Área restrita aos administradores e proprietários do restaurante.'}
-            </p>
-          </div>
-          <span className="text-blue-400 text-xs font-semibold uppercase tracking-wider group-hover:underline flex items-center gap-1">
-            <span>{user ? (isAdmin ? 'Acessar Painel' : 'Área Restrita') : 'Acessar Login'}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </span>
-        </Link>
-      </div>
-
-      {/* Card Status do Banco Supabase e RBAC */}
-      <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-slate-800 text-emerald-400">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-white">Segurança & Permissões RBAC Ativas</h4>
-            <p className="text-slate-400 text-sm">
-              Proteção de rotas no cliente, isolamento multi-tenant e validação de papéis (<code className="text-orange-400">GESTOR</code>, <code className="text-amber-400">COZINHA</code>, <code className="text-emerald-400">CAIXA</code>).
-            </p>
-          </div>
-        </div>
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>RBAC Ativo</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function App() {
   return (
     <AuthProvider>
@@ -417,8 +274,10 @@ export default function App() {
         {/* Main Content */}
         <main className="flex-1">
           <Routes>
-            {/* Rotas Públicas */}
-            <Route path="/" element={<Home />} />
+            {/* Rota Raiz: Landing Page de Vendas de Alta Conversão */}
+            <Route path="/" element={<LandingPage />} />
+
+            {/* Rotas Públicas de Comanda e Login de Equipe */}
             <Route path="/comanda/:token" element={<ComandaCliente />} />
             <Route path="/login" element={<AdminLogin />} />
 
@@ -462,14 +321,51 @@ export default function App() {
               }
             />
 
-            {/* Fallback de rotas desconhecidas */}
-            <Route path="*" element={<Home />} />
+            {/* Fallback de rotas desconhecidas: Landing Page */}
+            <Route path="*" element={<LandingPage />} />
           </Routes>
         </main>
 
-        {/* Footer */}
-        <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-500">
-          Restaurante App &bull; BMad Method &bull; React + Vite + Tailwind CSS + Supabase RBAC
+        {/* Commercial Footer */}
+        <footer className="border-t border-slate-900 bg-slate-950/80 py-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 text-xs text-slate-400">
+            <div className="space-y-3 md:col-span-2">
+              <div className="flex items-center gap-2 font-bold text-base text-white">
+                <span className="w-6 h-6 rounded-lg bg-orange-500 flex items-center justify-center text-white font-extrabold text-sm">
+                  R
+                </span>
+                <span>Restaurante<span className="text-orange-500">App</span></span>
+              </div>
+              <p className="max-w-sm text-slate-400">
+                Plataforma SaaS integrada para automação de restaurantes: Cardápio Digital QR Code, KDS em tempo real com alerta sonoro e Caixa POS.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h5 className="font-semibold text-white uppercase tracking-wider text-[11px]">Navegação</h5>
+              <ul className="space-y-1.5">
+                <li><a href="/#recursos" className="hover:text-orange-400 transition-colors">Módulos & Recursos</a></li>
+                <li><a href="/#calculadora" className="hover:text-orange-400 transition-colors">Simulador de ROI</a></li>
+                <li><a href="/#como-funciona" className="hover:text-orange-400 transition-colors">Como Funciona</a></li>
+                <li><a href="/#planos" className="hover:text-orange-400 transition-colors">Planos & Preços</a></li>
+                <li><a href="/#faq" className="hover:text-orange-400 transition-colors">Dúvidas Frequentes</a></li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h5 className="font-semibold text-white uppercase tracking-wider text-[11px]">Acesso de Equipe</h5>
+              <ul className="space-y-1.5">
+                <li><Link to="/login" className="hover:text-orange-400 transition-colors">Login Geral</Link></li>
+                <li><Link to="/admin" className="hover:text-orange-400 transition-colors">Painel Gestor</Link></li>
+                <li><Link to="/cozinha" className="hover:text-orange-400 transition-colors">Monitor KDS</Link></li>
+                <li><Link to="/caixa" className="hover:text-orange-400 transition-colors">Terminal POS</Link></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="max-w-7xl mx-auto px-4 text-center text-[11px] text-slate-600 border-t border-slate-900 pt-6">
+            &copy; {new Date().getFullYear()} RestauranteApp SaaS &bull; Todos os direitos reservados.
+          </div>
         </footer>
       </div>
     </AuthProvider>
