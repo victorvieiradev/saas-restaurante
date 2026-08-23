@@ -1,65 +1,5 @@
 import { supabase } from '../lib/supabase.js'
-
-const STORAGE_KEY_PREFIX = 'restaurante_usuarios_equipe_'
-
-export const DEMO_USERS = [
-  {
-    id: 'usr-demo-admin-01',
-    restaurante_id: 'res-demo-001',
-    email: 'admin@restaurante.com',
-    senha: '123456',
-    nome: 'Gestor Administrador',
-    role: 'GESTOR',
-    ativo: true,
-    criado_em: '2026-08-01T10:00:00Z',
-  },
-  {
-    id: 'usr-demo-cozinha-02',
-    restaurante_id: 'res-demo-001',
-    email: 'cozinha@restaurante.com',
-    senha: '123456',
-    nome: 'Pedro Cozinheiro',
-    role: 'COZINHA',
-    ativo: true,
-    criado_em: '2026-08-02T11:00:00Z',
-  },
-  {
-    id: 'usr-demo-caixa-03',
-    restaurante_id: 'res-demo-001',
-    email: 'caixa@restaurante.com',
-    senha: '123456',
-    nome: 'Maria Operadora de Caixa',
-    role: 'CAIXA',
-    ativo: true,
-    criado_em: '2026-08-03T12:00:00Z',
-  }
-]
-
-function getMockUsuarios(restauranteId = 'res-demo-001') {
-  try {
-    const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${restauranteId}`)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
-      }
-    }
-  } catch (e) {
-    console.warn('Erro ao ler mock de usuários:', e)
-  }
-
-  const initial = DEMO_USERS.map(u => ({ ...u, restaurante_id: restauranteId }))
-  saveMockUsuarios(restauranteId, initial)
-  return initial
-}
-
-function saveMockUsuarios(restauranteId, data) {
-  try {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}${restauranteId}`, JSON.stringify(data))
-  } catch (e) {
-    console.warn('Erro ao persistir mock de usuários:', e)
-  }
-}
+import { isValidUUID } from '../utils/uuid.js'
 
 /**
  * Busca o perfil detalhado do usuário por e-mail e/ou ID do restaurante
@@ -76,6 +16,7 @@ export async function fetchUserProfile(email, restauranteId = null) {
       .ilike('email', normalizedEmail)
 
     if (restauranteId) {
+      if (!isValidUUID(restauranteId)) return null
       query = query.eq('restaurante_id', restauranteId)
     }
 
@@ -85,39 +26,7 @@ export async function fetchUserProfile(email, restauranteId = null) {
       return data
     }
   } catch (err) {
-    console.warn('Fallback ativado na busca do perfil de usuário:', err)
-  }
-
-  // Fallback para mock local
-  const currentRestId = restauranteId || 'res-demo-001'
-  let mockList = getMockUsuarios(currentRestId)
-  let found = mockList.find(u => u.email.toLowerCase() === normalizedEmail)
-
-  if (!found && !restauranteId) {
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (key && key.startsWith(STORAGE_KEY_PREFIX)) {
-          const list = JSON.parse(localStorage.getItem(key) || '[]')
-          const candidate = list.find(u => u.email.toLowerCase() === normalizedEmail)
-          if (candidate) {
-            found = candidate
-            break
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Erro ao varrer localStorage para perfil:', e)
-    }
-  }
-
-  if (found) {
-    return found
-  }
-
-  // Se for o e-mail admin padrão e não estiver na lista mock
-  if (normalizedEmail === 'admin@restaurante.com') {
-    return DEMO_USERS[0]
+    console.warn('Erro ao buscar perfil de usuário no Supabase:', err)
   }
 
   return null
@@ -126,7 +35,11 @@ export async function fetchUserProfile(email, restauranteId = null) {
 /**
  * Lista todos os membros da equipe de um restaurante
  */
-export async function fetchUsuariosEquipe(restauranteId = 'res-demo-001') {
+export async function fetchUsuariosEquipe(restauranteId) {
+  if (!restauranteId || !isValidUUID(restauranteId)) {
+    return { data: [], error: null }
+  }
+
   try {
     const { data, error } = await supabase
       .from('usuarios_restaurante')
@@ -134,46 +47,47 @@ export async function fetchUsuariosEquipe(restauranteId = 'res-demo-001') {
       .eq('restaurante_id', restauranteId)
       .order('criado_em', { ascending: false })
 
-    if (data && !error && data.length > 0) {
-      saveMockUsuarios(restauranteId, data)
-      return { data, error: null }
+    if (error) {
+      console.warn('Erro ao listar equipe no Supabase:', error.message)
+      return { data: [], error }
     }
-  } catch (err) {
-    console.warn('Fallback ativado na listagem da equipe:', err)
-  }
 
-  const mockData = getMockUsuarios(restauranteId)
-  return { data: mockData, error: null }
+    return { data: data || [], error: null }
+  } catch (err) {
+    console.warn('Exceção ao listar equipe:', err)
+    return { data: [], error: err }
+  }
 }
 
 /**
  * Cadastra ou atualiza um usuário / membro da equipe
  */
-export async function saveUsuarioEquipe(usuario, restauranteId = 'res-demo-001') {
-  const isEditing = Boolean(usuario.id && !usuario.id.startsWith('temp-'))
-  const id = isEditing ? usuario.id : `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-
-  // Preserva ou define senha
-  let senha = usuario.senha?.trim()
-  if (!senha) {
-    if (isEditing) {
-      const mockList = getMockUsuarios(restauranteId)
-      const existing = mockList.find(u => u.id === id)
-      senha = existing?.senha || '123456'
-    } else {
-      senha = '123456'
-    }
+export async function saveUsuarioEquipe(usuario, restauranteId) {
+  if (!usuario || typeof usuario !== 'object' || !usuario.email) {
+    return { data: null, error: new Error('Dados do usuário inválidos.') }
   }
 
+  if (!restauranteId || !isValidUUID(restauranteId)) {
+    return { data: null, error: new Error('ID de restaurante inválido ou não informado.') }
+  }
+
+  if (usuario.id && !isValidUUID(usuario.id)) {
+    return { data: null, error: new Error('ID do usuário inválido.') }
+  }
+
+  const isEditing = Boolean(usuario.id)
+
   const payload = {
-    id,
     restaurante_id: restauranteId,
     email: usuario.email.trim().toLowerCase(),
-    senha,
-    nome: usuario.nome.trim(),
+    senha: usuario.senha?.trim() || '123456',
+    nome: usuario.nome?.trim() || 'Usuário',
     role: usuario.role || 'COZINHA',
     ativo: usuario.ativo !== undefined ? Boolean(usuario.ativo) : true,
-    criado_em: usuario.criado_em || new Date().toISOString(),
+  }
+
+  if (isEditing) {
+    payload.id = usuario.id
   }
 
   try {
@@ -182,7 +96,7 @@ export async function saveUsuarioEquipe(usuario, restauranteId = 'res-demo-001')
       result = await supabase
         .from('usuarios_restaurante')
         .update(payload)
-        .eq('id', id)
+        .eq('id', usuario.id)
         .eq('restaurante_id', restauranteId)
         .select()
         .single()
@@ -195,37 +109,24 @@ export async function saveUsuarioEquipe(usuario, restauranteId = 'res-demo-001')
     }
 
     if (result.data && !result.error) {
-      const mockList = getMockUsuarios(restauranteId)
-      const updatedMock = isEditing
-        ? mockList.map(u => (u.id === id ? result.data : u))
-        : [result.data, ...mockList]
-      saveMockUsuarios(restauranteId, updatedMock)
       return { data: result.data, error: null }
     }
+
+    return { data: null, error: result.error }
   } catch (err) {
-    console.warn('Fallback ativado ao salvar usuário da equipe:', err)
+    console.warn('Erro ao salvar usuário da equipe no Supabase:', err)
+    return { data: null, error: err }
   }
-
-  // Fallback Local
-  const mockList = getMockUsuarios(restauranteId)
-  const existingIdx = mockList.findIndex(u => u.id === id || u.email === payload.email)
-  let updatedMock = []
-
-  if (existingIdx >= 0) {
-    updatedMock = [...mockList]
-    updatedMock[existingIdx] = { ...mockList[existingIdx], ...payload }
-  } else {
-    updatedMock = [payload, ...mockList]
-  }
-
-  saveMockUsuarios(restauranteId, updatedMock)
-  return { data: payload, error: null }
 }
 
 /**
  * Alterna o status de ativo/inativo de um membro da equipe
  */
-export async function toggleUsuarioStatus(id, ativo, restauranteId = 'res-demo-001') {
+export async function toggleUsuarioStatus(id, ativo, restauranteId) {
+  if (!id || !isValidUUID(id) || !restauranteId || !isValidUUID(restauranteId)) {
+    return { data: null, error: new Error('Parâmetros inválidos.') }
+  }
+
   try {
     const { data, error } = await supabase
       .from('usuarios_restaurante')
@@ -236,25 +137,23 @@ export async function toggleUsuarioStatus(id, ativo, restauranteId = 'res-demo-0
       .single()
 
     if (data && !error) {
-      const mockList = getMockUsuarios(restauranteId)
-      const updated = mockList.map(u => (u.id === id ? { ...u, ativo } : u))
-      saveMockUsuarios(restauranteId, updated)
       return { data, error: null }
     }
+    return { data: null, error }
   } catch (err) {
-    console.warn('Fallback ativado ao alterar status do usuário:', err)
+    console.warn('Erro ao alterar status do usuário no Supabase:', err)
+    return { data: null, error: err }
   }
-
-  const mockList = getMockUsuarios(restauranteId)
-  const updated = mockList.map(u => (u.id === id ? { ...u, ativo } : u))
-  saveMockUsuarios(restauranteId, updated)
-  return { data: { id, ativo }, error: null }
 }
 
 /**
  * Remove um membro da equipe
  */
-export async function deleteUsuario(id, restauranteId = 'res-demo-001') {
+export async function deleteUsuario(id, restauranteId) {
+  if (!id || !isValidUUID(id) || !restauranteId || !isValidUUID(restauranteId)) {
+    return { error: new Error('Parâmetros inválidos.') }
+  }
+
   try {
     const { error } = await supabase
       .from('usuarios_restaurante')
@@ -262,18 +161,10 @@ export async function deleteUsuario(id, restauranteId = 'res-demo-001') {
       .eq('id', id)
       .eq('restaurante_id', restauranteId)
 
-    if (!error) {
-      const mockList = getMockUsuarios(restauranteId)
-      const updated = mockList.filter(u => u.id !== id)
-      saveMockUsuarios(restauranteId, updated)
-      return { error: null }
-    }
+    return { error: error || null }
   } catch (err) {
-    console.warn('Fallback ativado ao remover usuário:', err)
+    console.warn('Erro ao remover usuário no Supabase:', err)
+    return { error: err }
   }
-
-  const mockList = getMockUsuarios(restauranteId)
-  const updated = mockList.filter(u => u.id !== id)
-  saveMockUsuarios(restauranteId, updated)
-  return { error: null }
 }
+

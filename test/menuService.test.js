@@ -1,20 +1,7 @@
-import { test, describe, beforeEach } from 'node:test'
+import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
-const mockStorage = new Map()
-const mockLocalStorage = {
-  getItem: (key) => mockStorage.get(key) || null,
-  setItem: (key, val) => mockStorage.set(key, String(val)),
-  removeItem: (key) => mockStorage.delete(key),
-  clear: () => mockStorage.clear()
-}
-
-Object.defineProperty(globalThis, 'localStorage', {
-  value: mockLocalStorage,
-  writable: true,
-  configurable: true
-})
-
+import { supabase } from '../src/lib/supabase.js'
 import {
   fetchCategorias,
   saveCategoria,
@@ -26,144 +13,151 @@ import {
   deleteProduto
 } from '../src/services/menuService.js'
 
-describe('menuService Unit Tests', () => {
-  beforeEach(() => {
-    mockStorage.clear()
-  })
+const VALID_REST_ID = '11111111-1111-4111-8111-111111111111'
+const VALID_CAT_ID = '33333333-3333-4333-8333-333333333333'
+const VALID_PROD_ID = '44444444-4444-4444-8444-444444444444'
 
+describe('menuService Unit Tests (Production)', () => {
   describe('Categorias CRUD', () => {
-    test('fetchCategorias retorna lista inicial de categorias ordenadas', async () => {
-      const cats = await fetchCategorias('demo-restaurante-id')
+    test('fetchCategorias retorna lista de categorias ordenadas', async () => {
+      const mockCats = [
+        { id: VALID_CAT_ID, restaurante_id: VALID_REST_ID, nome: 'Pratos Principais', ordem: 1, ativo: true }
+      ]
+      supabase.from = () => ({
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: mockCats, error: null })
+          })
+        })
+      })
+
+      const cats = await fetchCategorias(VALID_REST_ID)
       assert.ok(Array.isArray(cats))
-      assert.ok(cats.length >= 4)
-      for (let i = 0; i < cats.length - 1; i++) {
-        assert.ok(cats[i].ordem <= cats[i + 1].ordem, 'Categorias devem estar ordenadas por ordem asc')
-      }
+      assert.equal(cats.length, 1)
+      assert.equal(cats[0].nome, 'Pratos Principais')
     })
 
-    test('saveCategoria cadastra nova categoria com ID gerado', async () => {
+    test('saveCategoria cadastra nova categoria via Supabase', async () => {
       const nova = { nome: 'Pizzas Especiais', ordem: 5, ativo: true }
-      const res = await saveCategoria(nova, 'demo-restaurante-id')
-      assert.equal(res.nome, 'Pizzas Especiais')
+      supabase.from = () => ({
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: { ...nova, id: VALID_CAT_ID, restaurante_id: VALID_REST_ID }, error: null })
+          })
+        })
+      })
 
-      const cats = await fetchCategorias('demo-restaurante-id')
-      const encontrada = cats.find(c => c.nome === 'Pizzas Especiais')
-      assert.ok(encontrada)
-      assert.ok(encontrada.id)
+      const res = await saveCategoria(nova, VALID_REST_ID)
+      assert.equal(res.nome, 'Pizzas Especiais')
+      assert.equal(res.id, VALID_CAT_ID)
     })
 
-    test('saveCategoria atualiza categoria existente preservando id', async () => {
-      const cats = await fetchCategorias('demo-restaurante-id')
-      const target = cats[0]
-
-      const res = await saveCategoria({ id: target.id, nome: 'Pratos Principais Premium', ordem: 1 }, 'demo-restaurante-id')
-      assert.equal(res.nome, 'Pratos Principais Premium')
-
-      const updatedList = await fetchCategorias('demo-restaurante-id')
-      const item = updatedList.find(c => c.id === target.id)
-      assert.equal(item.nome, 'Pratos Principais Premium')
+    test('saveCategoria rejeita categoria com ID não-UUID', async () => {
+      await assert.rejects(
+        () => saveCategoria({ id: 'id-invalido', nome: 'Categoria' }, VALID_REST_ID),
+        /ID de categoria inválido/
+      )
     })
 
     test('toggleCategoriaStatus altera status ativo/inativo', async () => {
-      const cats = await fetchCategorias('demo-restaurante-id')
-      const target = cats[0]
+      supabase.from = () => ({
+        update: () => ({
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        })
+      })
 
-      const res = await toggleCategoriaStatus(target.id, false, 'demo-restaurante-id')
+      const res = await toggleCategoriaStatus(VALID_CAT_ID, false, VALID_REST_ID)
       assert.equal(res, true)
-
-      const updatedList = await fetchCategorias('demo-restaurante-id')
-      const item = updatedList.find(c => c.id === target.id)
-      assert.equal(item.ativo, false)
-
-      await toggleCategoriaStatus(target.id, true, 'demo-restaurante-id')
-      const reativado = (await fetchCategorias('demo-restaurante-id')).find(c => c.id === target.id)
-      assert.equal(reativado.ativo, true)
     })
 
     test('deleteCategoria remove categoria do cardápio', async () => {
-      const cats = await fetchCategorias('demo-restaurante-id')
-      const target = cats[0]
-      const totalAntes = cats.length
+      supabase.from = () => ({
+        delete: () => ({
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        })
+      })
 
-      const res = await deleteCategoria(target.id, 'demo-restaurante-id')
+      const res = await deleteCategoria(VALID_CAT_ID, VALID_REST_ID)
       assert.equal(res, true)
-
-      const remaining = await fetchCategorias('demo-restaurante-id')
-      assert.equal(remaining.length, totalAntes - 1)
-      assert.ok(!remaining.some(c => c.id === target.id))
     })
   })
 
   describe('Produtos CRUD', () => {
-    test('fetchProdutos retorna lista inicial de produtos', async () => {
-      const prods = await fetchProdutos('demo-restaurante-id')
+    test('fetchProdutos retorna lista de produtos do Supabase', async () => {
+      const mockProds = [
+        { id: VALID_PROD_ID, restaurante_id: VALID_REST_ID, nome: 'Hambúrguer Gourmet', preco: 38.90, disponivel: true }
+      ]
+      supabase.from = () => ({
+        select: () => ({
+          eq: () => ({
+            order: () => Promise.resolve({ data: mockProds, error: null })
+          })
+        })
+      })
+
+      const prods = await fetchProdutos(VALID_REST_ID)
       assert.ok(Array.isArray(prods))
-      assert.ok(prods.length >= 5)
-      for (const p of prods) {
-        assert.ok(p.nome)
-        assert.ok(typeof p.preco === 'number')
-      }
+      assert.equal(prods.length, 1)
+      assert.equal(prods[0].nome, 'Hambúrguer Gourmet')
     })
 
-    test('saveProduto cadastra novo produto com ID gerado', async () => {
+    test('saveProduto cadastra novo produto via Supabase', async () => {
       const novoProduto = {
-        categoria_id: 'cat-1',
+        categoria_id: VALID_CAT_ID,
         nome: 'Picanha na Chapa 500g',
         descricao: 'Acompanha farofa de ovos e vinagrete especial.',
         preco: '89.90',
         disponivel: true
       }
+      supabase.from = () => ({
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({ data: { ...novoProduto, id: VALID_PROD_ID, preco: 89.90, restaurante_id: VALID_REST_ID }, error: null })
+          })
+        })
+      })
 
-      const res = await saveProduto(novoProduto, 'demo-restaurante-id')
+      const res = await saveProduto(novoProduto, VALID_REST_ID)
       assert.equal(res.nome, 'Picanha na Chapa 500g')
       assert.equal(res.preco, 89.90)
-
-      const prods = await fetchProdutos('demo-restaurante-id')
-      const target = prods.find(p => p.nome === 'Picanha na Chapa 500g')
-      assert.ok(target)
-      assert.ok(target.id)
     })
 
-    test('saveProduto atualiza produto existente preservando ID', async () => {
-      const prods = await fetchProdutos('demo-restaurante-id')
-      const target = prods[0]
-
-      const res = await saveProduto({ id: target.id, preco: 42.50, nome: 'Hambúrguer Artesanal Supremo' }, 'demo-restaurante-id')
-      assert.equal(res.preco, 42.50)
-
-      const updatedList = await fetchProdutos('demo-restaurante-id')
-      const item = updatedList.find(p => p.id === target.id)
-      assert.equal(item.nome, 'Hambúrguer Artesanal Supremo')
-      assert.equal(item.preco, 42.50)
+    test('saveProduto rejeita produto com ID não-UUID', async () => {
+      await assert.rejects(
+        () => saveProduto({ id: 'id-invalido', nome: 'Produto', preco: 10 }, VALID_REST_ID),
+        /ID de produto inválido/
+      )
     })
 
     test('toggleProdutoDisponibilidade altera flag disponivel', async () => {
-      const prods = await fetchProdutos('demo-restaurante-id')
-      const target = prods[0]
+      supabase.from = () => ({
+        update: () => ({
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        })
+      })
 
-      const res = await toggleProdutoDisponibilidade(target.id, false, 'demo-restaurante-id')
+      const res = await toggleProdutoDisponibilidade(VALID_PROD_ID, false, VALID_REST_ID)
       assert.equal(res, true)
-
-      const updatedList = await fetchProdutos('demo-restaurante-id')
-      const item = updatedList.find(p => p.id === target.id)
-      assert.equal(item.disponivel, false)
-
-      await toggleProdutoDisponibilidade(target.id, true, 'demo-restaurante-id')
-      const reativado = (await fetchProdutos('demo-restaurante-id')).find(p => p.id === target.id)
-      assert.equal(reativado.disponivel, true)
     })
 
     test('deleteProduto remove produto do cardápio', async () => {
-      const prods = await fetchProdutos('demo-restaurante-id')
-      const target = prods[0]
-      const totalAntes = prods.length
+      supabase.from = () => ({
+        delete: () => ({
+          eq: () => ({
+            eq: () => Promise.resolve({ error: null })
+          })
+        })
+      })
 
-      const res = await deleteProduto(target.id, 'demo-restaurante-id')
+      const res = await deleteProduto(VALID_PROD_ID, VALID_REST_ID)
       assert.equal(res, true)
-
-      const remaining = await fetchProdutos('demo-restaurante-id')
-      assert.equal(remaining.length, totalAntes - 1)
-      assert.ok(!remaining.some(p => p.id === target.id))
     })
   })
 })
+

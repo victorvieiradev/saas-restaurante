@@ -89,34 +89,20 @@ function Navbar() {
 
         {/* Links de Navegação Filtrados por Papel RBAC */}
         <nav className="flex items-center gap-2 sm:gap-3 text-sm font-medium">
-          {/* Se deslogado: exibe link demo do cliente e botão de login */}
+          {/* Se deslogado: botão de login */}
           {!user && (
-            <>
-              <Link
-                to="/comanda/demo-token-015"
-                className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-orange-400 hover:bg-slate-800/60 transition-colors"
-              >
-                Cardápio Demo
-              </Link>
-              <Link
-                to="/admin"
-                className="px-3.5 py-1.5 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Entrar</span>
-              </Link>
-            </>
+            <Link
+              to="/admin"
+              className="px-3.5 py-1.5 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Entrar no Sistema</span>
+            </Link>
           )}
 
           {/* Se autenticado como GESTOR: acesso completo a todos os módulos */}
           {user && isAdmin && (
             <>
-              <Link
-                to="/comanda/demo-token-015"
-                className="hidden md:inline-flex px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-orange-400 hover:bg-slate-800/60 transition-colors text-xs"
-              >
-                Cliente
-              </Link>
               <Link
                 to="/cozinha"
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${
@@ -279,26 +265,24 @@ function Home() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        {/* Módulo Cliente (Público) */}
-        <Link
-          to="/comanda/demo-token-015"
-          className="group p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-orange-500/50 hover:bg-slate-800/80 transition-all duration-300 shadow-lg hover:shadow-orange-500/10 flex flex-col justify-between"
+        {/* Módulo Cliente (QR Code na Mesa) */}
+        <div
+          className="p-6 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between shadow-lg"
         >
           <div>
-            <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center mb-4">
               <QrCode className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xl font-bold text-white">Módulo Cliente</h3>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">Público</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">QR Code</span>
             </div>
-            <p className="text-slate-400 text-sm mb-4">Cardápio digital acessado via QR Code na comanda sem necessidade de cadastro.</p>
+            <p className="text-slate-400 text-sm mb-4">Cardápio digital acessado diretamente pelo cliente ao escanear o QR Code da mesa ou comanda.</p>
           </div>
-          <span className="text-orange-400 text-xs font-semibold uppercase tracking-wider group-hover:underline flex items-center gap-1">
-            <span>Acessar Cardápio</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+          <span className="text-slate-500 text-xs font-medium flex items-center gap-1">
+            <span>Acesso via câmera / QR Code</span>
           </span>
-        </Link>
+        </div>
 
         {/* Módulo Cozinha KDS (Permitido para GESTOR e COZINHA) */}
         <Link

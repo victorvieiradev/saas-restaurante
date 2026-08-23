@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useAuth } from '../../context/AuthContext'
 import {
   fetchUsuariosEquipe,
   saveUsuarioEquipe,
@@ -28,7 +29,8 @@ import {
   EyeOff
 } from 'lucide-react'
 
-export default function TeamManager({ restauranteId = 'res-demo-001' }) {
+export default function TeamManager({ restauranteId }) {
+  const { user, restaurante } = useAuth()
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -441,7 +443,11 @@ export default function TeamManager({ restauranteId = 'res-demo-001' }) {
               </thead>
               <tbody className="divide-y divide-slate-800/80">
                 {filteredUsuarios.map((member) => {
-                  const isGestorPrincipal = member.role === 'GESTOR' && member.email.toLowerCase() === 'admin@restaurante.com'
+                  const isGestorPrincipal = member.role === 'GESTOR' && (
+                    (user?.email && member.email.toLowerCase() === user.email.toLowerCase()) ||
+                    (restaurante?.email && member.email.toLowerCase() === restaurante.email.toLowerCase()) ||
+                    member.email.toLowerCase() === 'admin@restaurante.com'
+                  )
                   const initials = member.nome
                     ? member.nome
                         .split(' ')

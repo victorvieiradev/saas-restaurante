@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { fetchUserProfile, DEMO_USERS } from '../services/userService.js'
+import { fetchUserProfile } from '../services/userService.js'
+import { isValidUUID } from '../utils/uuid.js'
 
 const AuthContext = createContext({})
-const DEMO_STORAGE_KEY = 'restaurante_gestor_session'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -16,81 +16,60 @@ export function AuthProvider({ children }) {
     if (!currentUser?.email) {
       setRestaurante(null)
       setUserProfile(null)
-      return
+      return null
     }
 
+    const normalizedEmail = currentUser.email.trim().toLowerCase()
+
     try {
-      // 1. Busca primeiro o perfil de equipe por e-mail (Sem limitar por ID arbitrário)
-      const profile = await fetchUserProfile(currentUser.email)
+      // 1. Busca perfil de colaborador na tabela usuarios_restaurante
+      const profile = await fetchUserProfile(normalizedEmail)
 
-      if (profile) {
-        setUserProfile(profile)
-        const targetRestId = profile.restaurante_id || 'res-demo-001'
-
-        // 2. Busca o estabelecimento a partir do restaurante_id real do perfil
+      if (profile && profile.restaurante_id && isValidUUID(profile.restaurante_id)) {
         const { data: restData } = await supabase
           .from('restaurantes')
           .select('*')
-          .eq('id', targetRestId)
+          .eq('id', profile.restaurante_id)
           .maybeSingle()
 
         if (restData) {
+          setUserProfile(profile)
           setRestaurante(restData)
-        } else {
-          setRestaurante({
-            id: targetRestId,
-            nome: 'Restaurante Sabor & Arte',
-            email: 'admin@restaurante.com',
-            slug: 'sabor-arte'
-          })
+          return { profile, restaurante: restData }
         }
-        return
       }
 
-      // 3. Caso não possua perfil na tabela de equipe, verifica se é o proprietário/gestor do restaurante
+      // 2. Busca na tabela restaurantes se o usuário autenticado for o proprietário
       const { data: ownerRest } = await supabase
         .from('restaurantes')
         .select('*')
-        .eq('email', currentUser.email)
+        .eq('email', normalizedEmail)
         .maybeSingle()
 
-      const currentRest = ownerRest || {
-        id: 'res-demo-001',
-        nome: currentUser.user_metadata?.nome_restaurante || 'Restaurante Sabor & Arte',
-        email: currentUser.email,
-        slug: 'sabor-arte'
+      if (ownerRest) {
+        const defaultProfile = {
+          id: currentUser.id,
+          restaurante_id: ownerRest.id,
+          email: normalizedEmail,
+          nome: currentUser.user_metadata?.nome || ownerRest.nome || 'Gestor',
+          role: 'GESTOR',
+          ativo: true,
+          criado_em: new Date().toISOString()
+        }
+        setUserProfile(defaultProfile)
+        setRestaurante(ownerRest)
+        return { profile: defaultProfile, restaurante: ownerRest }
       }
-      setRestaurante(currentRest)
 
-      const fallbackRole = currentUser.user_metadata?.role || (ownerRest ? 'GESTOR' : 'GESTOR')
-      const defaultProfile = {
-        id: currentUser.id || 'usr-default',
-        restaurante_id: currentRest.id,
-        email: currentUser.email,
-        nome: currentUser.user_metadata?.nome || currentUser.email?.split('@')[0] || 'Usuário',
-        role: fallbackRole,
-        ativo: true,
-        criado_em: new Date().toISOString()
-      }
-      setUserProfile(defaultProfile)
+      // Se nenhum restaurante real for localizado
+      setUserProfile(null)
+      setRestaurante(null)
+      return null
     } catch (err) {
-      console.warn('Fallback ativado para dados do restaurante e perfil:', err)
-      const fallbackRest = {
-        id: 'res-demo-001',
-        nome: 'Restaurante Sabor & Arte',
-        email: currentUser.email || 'admin@restaurante.com',
-        slug: 'sabor-arte'
-      }
-      setRestaurante(fallbackRest)
-      setUserProfile({
-        id: currentUser.id || 'usr-demo-01',
-        restaurante_id: fallbackRest.id,
-        email: currentUser.email || 'admin@restaurante.com',
-        nome: currentUser.user_metadata?.nome || currentUser.email?.split('@')[0] || 'Gestor',
-        role: currentUser.user_metadata?.role || 'GESTOR',
-        ativo: true,
-        criado_em: new Date().toISOString()
-      })
+      console.warn('Erro ao carregar restaurante e perfil no Supabase:', err)
+      setUserProfile(null)
+      setRestaurante(null)
+      return null
     }
   }
 
@@ -98,49 +77,54 @@ export function AuthProvider({ children }) {
     let isMounted = true
 
     const initializeAuth = async () => {
-      // 1. Verificar se existe uma sessão salva em localStorage (dev/demo/persistência local)
-      const savedDemoSession = localStorage.getItem(DEMO_STORAGE_KEY)
-      if (savedDemoSession) {
-        try {
-          const parsed = JSON.parse(savedDemoSession)
-          if (parsed?.user && parsed?.session) {
-            if (!isMounted) return
-            setUser(parsed.user)
-            setSession(parsed.session)
-            setRestaurante(parsed.restaurante || {
-              id: 'res-demo-001',
-              nome: 'Restaurante Sabor & Arte',
-              email: parsed.user.email,
-              slug: 'sabor-arte'
-            })
-            setUserProfile(parsed.userProfile || {
-              id: parsed.user.id || 'usr-demo-01',
-              restaurante_id: parsed.restaurante?.id || 'res-demo-001',
-              email: parsed.user.email,
-              nome: parsed.user.email?.split('@')[0] || 'Gestor',
-              role: 'GESTOR',
-              ativo: true
-            })
-            setLoading(false)
-            return
-          }
-        } catch (e) {
-          localStorage.removeItem(DEMO_STORAGE_KEY)
-        }
-      }
-
-      // 2. Obter sessão nativa do Supabase
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!isMounted) return
         setSession(session)
         const currentUser = session?.user ?? null
         setUser(currentUser)
+
         if (currentUser) {
-          await fetchRestauranteAndProfile(currentUser)
+          const result = await fetchRestauranteAndProfile(currentUser)
+          if (!result && isMounted) {
+            // Se o usuário estiver autenticado no auth mas sem restaurante no banco
+            setUser(null)
+            setSession(null)
+          }
+        } else {
+          // Restaura sessão persistida de membros da equipe (COZINHA/CAIXA)
+          try {
+            const rawTeamSession = typeof localStorage !== 'undefined' ? localStorage.getItem('restaurante_team_session') : null
+            if (rawTeamSession) {
+              const parsed = JSON.parse(rawTeamSession)
+              if (parsed?.userProfile?.email) {
+                const refreshedProfile = await fetchUserProfile(parsed.userProfile.email, parsed.userProfile.restaurante_id)
+                if (refreshedProfile && refreshedProfile.ativo) {
+                  const { data: restData } = await supabase
+                    .from('restaurantes')
+                    .select('*')
+                    .eq('id', refreshedProfile.restaurante_id)
+                    .maybeSingle()
+
+                  if (restData && isMounted) {
+                    setUser(parsed.user)
+                    setSession(parsed.session)
+                    setRestaurante(restData)
+                    setUserProfile(refreshedProfile)
+                  } else if (typeof localStorage !== 'undefined') {
+                    localStorage.removeItem('restaurante_team_session')
+                  }
+                } else if (typeof localStorage !== 'undefined') {
+                  localStorage.removeItem('restaurante_team_session')
+                }
+              }
+            }
+          } catch (teamErr) {
+            console.warn('Erro ao restaurar sessão de equipe:', teamErr)
+          }
         }
       } catch (err) {
-        console.warn('Sessão inicial Supabase:', err)
+        console.warn('Erro na inicialização da sessão Supabase:', err)
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -148,21 +132,25 @@ export function AuthProvider({ children }) {
 
     initializeAuth()
 
-    // Escutar mudanças de autenticação no Supabase
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      if (!localStorage.getItem(DEMO_STORAGE_KEY)) {
-        if (!isMounted) return
-        setSession(newSession)
-        const currentUser = newSession?.user ?? null
-        setUser(currentUser)
-        if (currentUser) {
-          await fetchRestauranteAndProfile(currentUser)
-        } else {
+      if (!isMounted) return
+      setSession(newSession)
+      const currentUser = newSession?.user ?? null
+      setUser(currentUser)
+
+      if (currentUser) {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('restaurante_team_session')
+        }
+        await fetchRestauranteAndProfile(currentUser)
+      } else {
+        const hasTeamSession = typeof localStorage !== 'undefined' && localStorage.getItem('restaurante_team_session')
+        if (!hasTeamSession) {
           setRestaurante(null)
           setUserProfile(null)
         }
-        if (isMounted) setLoading(false)
       }
+      setLoading(false)
     })
 
     return () => {
@@ -171,24 +159,7 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const saveDemoSession = (mockUser, mockSession, mockRestaurante, mockProfile) => {
-    setUser(mockUser)
-    setSession(mockSession)
-    setRestaurante(mockRestaurante)
-    setUserProfile(mockProfile)
-    try {
-      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({
-        user: mockUser,
-        session: mockSession,
-        restaurante: mockRestaurante,
-        userProfile: mockProfile
-      }))
-    } catch (e) {
-      console.warn('Erro ao salvar sessão demo no localStorage:', e)
-    }
-  }
-
-  const authenticateMockUser = async (email, password) => {
+  const authenticateTeamMember = async (email, password) => {
     const normalizedEmail = email.toLowerCase().trim()
     const userFound = await fetchUserProfile(normalizedEmail)
 
@@ -199,7 +170,21 @@ export function AuthProvider({ children }) {
 
       const expectedPassword = userFound.senha || '123456'
       if (password !== expectedPassword) {
-        throw new Error('Senha incorreta. Verifique os dados digitados.')
+        throw new Error('E-mail ou senha inválidos.')
+      }
+
+      if (!userFound.restaurante_id || !isValidUUID(userFound.restaurante_id)) {
+        throw new Error('E-mail ou senha inválidos.')
+      }
+
+      const { data: restData } = await supabase
+        .from('restaurantes')
+        .select('*')
+        .eq('id', userFound.restaurante_id)
+        .maybeSingle()
+
+      if (!restData) {
+        throw new Error('E-mail ou senha inválidos.')
       }
 
       const roleFound = userFound.role || 'COZINHA'
@@ -209,19 +194,29 @@ export function AuthProvider({ children }) {
         user_metadata: {
           nome: userFound.nome,
           role: roleFound,
-          nome_restaurante: 'Restaurante Sabor & Arte'
+          nome_restaurante: restData.nome
         }
       }
-      const mockSession = { user: mockUser, access_token: `token-${roleFound.toLowerCase()}-${userFound.id}` }
-      const mockRestaurante = {
-        id: userFound.restaurante_id || 'res-demo-001',
-        nome: 'Restaurante Sabor & Arte',
-        email: 'admin@restaurante.com',
-        slug: 'sabor-arte'
+      const mockSession = { user: mockUser, access_token: `session-${userFound.id}` }
+
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('restaurante_team_session', JSON.stringify({
+            user: mockUser,
+            session: mockSession,
+            userProfile: userFound
+          }))
+        } catch (storageErr) {
+          console.warn('Falha ao persistir sessão da equipe:', storageErr)
+        }
       }
 
-      saveDemoSession(mockUser, mockSession, mockRestaurante, userFound)
-      return { data: { user: mockUser, session: mockSession, userProfile: userFound, role: roleFound }, error: null }
+      setUser(mockUser)
+      setSession(mockSession)
+      setRestaurante(restData)
+      setUserProfile(userFound)
+
+      return { data: { user: mockUser, session: mockSession, userProfile: userFound, role: roleFound, restaurante: restData }, error: null }
     }
     return null
   }
@@ -237,35 +232,41 @@ export function AuthProvider({ children }) {
       })
 
       if (!error && data?.user) {
-        // Validar se o usuário está ativo no perfil
-        const profile = await fetchUserProfile(normalizedEmail)
-        if (profile && profile.ativo === false) {
+        const loaded = await fetchRestauranteAndProfile(data.user)
+        if (!loaded) {
+          await supabase.auth.signOut()
+          throw new Error('E-mail ou senha inválidos.')
+        }
+
+        if (loaded.profile && loaded.profile.ativo === false) {
           await supabase.auth.signOut()
           throw new Error('Acesso desativado. Entre em contato com o gestor do restaurante.')
         }
-        await fetchRestauranteAndProfile(data.user)
-        const resolvedRole = profile?.role || data.user.user_metadata?.role || 'GESTOR'
-        return { data: { ...data, userProfile: profile, role: resolvedRole }, error: null }
+
+        const resolvedRole = loaded.profile?.role || data.user.user_metadata?.role || 'GESTOR'
+        return { data: { ...data, userProfile: loaded.profile, restaurante: loaded.restaurante, role: resolvedRole }, error: null }
       }
     } catch (authErr) {
-      if (authErr.message?.includes('Acesso desativado')) {
+      if (authErr.message?.includes('Acesso desativado') || authErr.message?.includes('E-mail ou senha inválidos')) {
         return { data: null, error: authErr }
       }
     }
 
-    // 2. Fallback / Mock para colaboradores cadastrados na equipe e perfis de demonstração
+    // 2. Tenta autenticação de colaborador na tabela usuarios_restaurante
     try {
-      const mockAuth = await authenticateMockUser(normalizedEmail, password)
-      if (mockAuth) return mockAuth
-      return { data: null, error: new Error('Credenciais inválidas ou e-mail/senha incorretos.') }
-    } catch (mockErr) {
-      return { data: null, error: mockErr }
+      const teamAuth = await authenticateTeamMember(normalizedEmail, password)
+      if (teamAuth) return teamAuth
+      return { data: null, error: new Error('E-mail ou senha inválidos.') }
+    } catch (teamErr) {
+      return { data: null, error: teamErr }
     }
   }
 
   const signOut = async () => {
     try {
-      localStorage.removeItem(DEMO_STORAGE_KEY)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('restaurante_team_session')
+      }
       await supabase.auth.signOut()
     } catch (err) {
       console.warn('Erro no signOut:', err)
@@ -311,3 +312,4 @@ export function useAuth() {
   }
   return context
 }
+

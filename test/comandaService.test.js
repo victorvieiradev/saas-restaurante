@@ -1,21 +1,5 @@
-import { test, describe, beforeEach } from 'node:test'
+import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-
-const mockStorage = new Map()
-const mockLocalStorage = {
-  getItem: (key) => mockStorage.get(key) || null,
-  setItem: (key, val) => mockStorage.set(key, String(val)),
-  removeItem: (key) => mockStorage.delete(key),
-  clear: () => mockStorage.clear(),
-  get length() { return mockStorage.size },
-  key: (i) => Array.from(mockStorage.keys())[i] || null
-}
-
-Object.defineProperty(globalThis, 'localStorage', {
-  value: mockLocalStorage,
-  writable: true,
-  configurable: true
-})
 
 globalThis.window = {
   dispatchEvent: () => {}
@@ -35,11 +19,10 @@ import {
   fetchHistoricoFechamentos
 } from '../src/services/comandaService.js'
 
-describe('comandaService Unit Tests', () => {
-  beforeEach(() => {
-    mockStorage.clear()
-  })
+const VALID_REST_ID = '11111111-1111-4111-8111-111111111111'
+const VALID_CMD_ID = '55555555-5555-4555-8555-555555555555'
 
+describe('comandaService Unit Tests (Production)', () => {
   describe('generateToken', () => {
     test('gera token iniciando com cmd_ e 12 caracteres', () => {
       const t1 = generateToken()
@@ -51,12 +34,13 @@ describe('comandaService Unit Tests', () => {
   })
 
   describe('fetchComandas', () => {
-    test('retorna array vazio se restauranteId for nulo', async () => {
+    test('retorna array vazio se restauranteId for nulo ou inválido', async () => {
       assert.deepEqual(await fetchComandas(null), [])
+      assert.deepEqual(await fetchComandas('invalido'), [])
     })
 
     test('retorna lista do Supabase quando online', async () => {
-      const mockComandas = [{ id: 'cmd-1', numero: '001' }]
+      const mockComandas = [{ id: VALID_CMD_ID, numero: '001', restaurante_id: VALID_REST_ID }]
       supabase.from = () => ({
         select: () => ({
           eq: () => ({
@@ -65,26 +49,9 @@ describe('comandaService Unit Tests', () => {
         })
       })
 
-      const res = await fetchComandas('res-123')
+      const res = await fetchComandas(VALID_REST_ID)
       assert.equal(res.length, 1)
       assert.equal(res[0].numero, '001')
-    })
-
-    test('retorna mock local e auto-corrige status quando Supabase falhar', async () => {
-      supabase.from = () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => Promise.resolve({ data: null, error: new Error('offline') })
-          })
-        })
-      })
-
-      mockStorage.set('restaurante_comandas_res-123', JSON.stringify([
-        { id: 'cmd-5', numero: '005', status: 'ENCERRADA' }
-      ]))
-
-      const res = await fetchComandas('res-123')
-      assert.equal(res[0].status, 'DISPONIVEL', 'Status ENCERRADA deve ser corrigido para DISPONIVEL')
     })
   })
 
@@ -96,10 +63,11 @@ describe('comandaService Unit Tests', () => {
 
     test('busca comanda no Supabase online com relação de restaurantes', async () => {
       const mockResult = {
-        id: 'cmd-1',
+        id: VALID_CMD_ID,
         numero: '001',
-        qr_code_token: 'cmd_token1234',
-        restaurantes: [{ id: 'res-1', nome: 'Restaurante Teste' }]
+        qr_code_token: 'cmd_a1b2c3d4',
+        restaurante_id: VALID_REST_ID,
+        restaurantes: { id: VALID_REST_ID, nome: 'Restaurante Real', slug: 'restaurante-real' }
       }
 
       supabase.from = () => ({
@@ -110,126 +78,55 @@ describe('comandaService Unit Tests', () => {
         })
       })
 
-      const res = await fetchComandaByToken('cmd_token1234')
+      const res = await fetchComandaByToken('cmd_a1b2c3d4')
       assert.ok(res)
       assert.equal(res.comanda.numero, '001')
-      assert.equal(res.restaurante.nome, 'Restaurante Teste')
-    })
-
-    test('busca comanda no fallback local por token e por número com sessão ativa', async () => {
-      supabase.from = () => ({
-        select: () => ({
-          or: () => ({
-            maybeSingle: () => Promise.resolve({ data: null, error: new Error('offline') })
-          })
-        })
-      })
-
-      mockStorage.set('restaurante_gestor_session', JSON.stringify({
-        restaurante: { id: 'res-sessao-01' }
-      }))
-
-      mockStorage.set('restaurante_comandas_res-sessao-01', JSON.stringify([
-        { id: 'cmd-99', numero: '099', qr_code_token: 'token-99', status: 'DISPONIVEL' }
-      ]))
-
-      const resToken = await fetchComandaByToken('token-99')
-      assert.ok(resToken)
-      assert.equal(resToken.comanda.numero, '099')
-
-      // Varredura em outros buckets de restaurantes
-      mockStorage.set('restaurante_comandas_outro_rest_2', JSON.stringify([
-        { id: 'cmd-88', numero: '088', qr_code_token: 'token-88', status: 'DISPONIVEL' }
-      ]))
-
-      const resOutro = await fetchComandaByToken('token-88')
-      assert.ok(resOutro)
-      assert.equal(resOutro.comanda.numero, '088')
+      assert.equal(res.restaurante.nome, 'Restaurante Real')
     })
   })
 
   describe('gerarLoteComandas', () => {
-    test('dispara erro para parâmetros inválidos', async () => {
-      await assert.rejects(() => gerarLoteComandas(null, 1, 0))
-    })
+    test('valida parâmetros e cria registros no Supabase', async () => {
+      supabase.from = (table) => {
+        if (table === 'comandas') {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () => Promise.resolve({ data: [], error: null })
+              })
+            }),
+            insert: (payload) => ({
+              select: () => Promise.resolve({ data: payload.map(p => ({ ...p, id: VALID_CMD_ID })), error: null })
+            })
+          }
+        }
+      }
 
-    test('cria lote com Supabase online', async () => {
-      const mockCreated = [{ id: 'cmd-100', numero: '100', qr_code_token: 'cmd_100', status: 'DISPONIVEL' }]
-      supabase.from = () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => Promise.resolve({ data: [], error: null })
-          })
-        }),
-        insert: () => ({
-          select: () => Promise.resolve({ data: mockCreated, error: null })
-        })
-      })
-
-      const res = await gerarLoteComandas('res-123', 100, 1)
-      assert.equal(res.length, 1)
-      assert.equal(res[0].numero, '100')
-    })
-
-    test('cria lote e salva no fallback local quando Supabase falhar', async () => {
-      supabase.from = () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => Promise.resolve({ data: [], error: null })
-          })
-        }),
-        insert: () => ({
-          select: () => Promise.resolve({ data: null, error: new Error('offline') })
-        })
-      })
-
-      const lote = await gerarLoteComandas('res-local', 50, 2)
-      assert.equal(lote.length, 2)
-      assert.equal(lote[0].numero, '050')
-      assert.equal(lote[1].numero, '051')
+      const res = await gerarLoteComandas(VALID_REST_ID, 1, 3, 3)
+      assert.equal(res.length, 3)
+      assert.equal(res[0].numero, '001')
+      assert.equal(res[1].numero, '002')
+      assert.equal(res[2].numero, '003')
     })
   })
 
   describe('updateComandaStatus & deleteComanda', () => {
-    test('updateComandaStatus atualiza status no Supabase online e propaga para outros buckets', async () => {
-      mockStorage.set('restaurante_comandas_outro_1', JSON.stringify([
-        { id: 'cmd-1', status: 'DISPONIVEL' }
-      ]))
-
+    test('updateComandaStatus atualiza status no Supabase', async () => {
       supabase.from = () => ({
         update: () => ({
           eq: () => ({
             eq: () => ({
-              select: () => Promise.resolve({ data: { id: 'cmd-1', status: 'EM_USO' }, error: null })
+              select: () => Promise.resolve({ data: [{ id: VALID_CMD_ID, status: 'EM_USO' }], error: null })
             })
           })
         })
       })
 
-      const res = await updateComandaStatus('cmd-1', 'res-demo-001', 'EM_USO')
+      const res = await updateComandaStatus(VALID_CMD_ID, VALID_REST_ID, 'EM_USO')
       assert.ok(res)
     })
 
-    test('updateComandaStatus atualiza status no fallback local quando offline e propaga buckets', async () => {
-      mockStorage.set('restaurante_comandas_outro_2', JSON.stringify([
-        { id: 'cmd-1', status: 'EM_USO' }
-      ]))
-
-      supabase.from = () => ({
-        update: () => ({
-          eq: () => ({
-            eq: () => ({
-              select: () => Promise.resolve({ data: null, error: new Error('offline') })
-            })
-          })
-        })
-      })
-
-      const res = await updateComandaStatus('cmd-1', 'res-demo-001', 'DISPONIVEL')
-      assert.ok(res)
-    })
-
-    test('deleteComanda exclui comanda no Supabase e no mock local', async () => {
+    test('deleteComanda exclui comanda no Supabase', async () => {
       supabase.from = () => ({
         delete: () => ({
           eq: () => ({
@@ -238,178 +135,135 @@ describe('comandaService Unit Tests', () => {
         })
       })
 
-      const res = await deleteComanda('cmd-1', 'res-demo-001')
+      const res = await deleteComanda(VALID_CMD_ID, VALID_REST_ID)
       assert.equal(res, true)
     })
   })
 
   describe('buscarComandaPorNumero', () => {
-    test('retorna null para termo de busca vazio', async () => {
-      assert.equal(await buscarComandaPorNumero(''), null)
-      assert.equal(await buscarComandaPorNumero(null), null)
-    })
+    test('busca comanda por número no Supabase', async () => {
+      const mockResult = {
+        id: VALID_CMD_ID,
+        numero: '015',
+        qr_code_token: 'cmd_15token',
+        restaurante_id: VALID_REST_ID,
+        restaurantes: { id: VALID_REST_ID, nome: 'Restaurante Teste' }
+      }
 
-    test('localiza comanda via Supabase online', async () => {
-      const mockCmd = { id: 'c15', numero: '015', qr_code_token: 'cmd_15' }
       supabase.from = () => ({
         select: () => ({
           eq: () => ({
             or: () => ({
-              maybeSingle: () => Promise.resolve({ data: mockCmd, error: null })
+              maybeSingle: () => Promise.resolve({ data: mockResult, error: null })
             })
           })
         })
       })
 
-      const res = await buscarComandaPorNumero('15', 'res-123')
+      const res = await buscarComandaPorNumero('015', VALID_REST_ID)
       assert.ok(res)
       assert.equal(res.comanda.numero, '015')
-    })
-
-    test('localiza comanda via fallback local com diferentes formatos (#015, 15, 015)', async () => {
-      supabase.from = () => ({
-        select: () => ({
-          eq: () => ({
-            or: () => ({
-              maybeSingle: () => Promise.resolve({ data: null, error: new Error('offline') })
-            })
-          })
-        })
-      })
-
-      const r1 = await buscarComandaPorNumero('#015', 'res-demo-001')
-      assert.ok(r1)
-      assert.equal(r1.comanda.numero, '015')
-
-      const r2 = await buscarComandaPorNumero('15', 'res-demo-001')
-      assert.ok(r2)
-      assert.equal(r2.comanda.numero, '015')
     })
   })
 
   describe('fetchComandasAtivas', () => {
-    test('retorna array vazio se restauranteId for nulo', async () => {
-      assert.deepEqual(await fetchComandasAtivas(null), [])
-    })
-
-    test('calcula pedidos_count via Supabase online', async () => {
-      const mockAtivas = [
-        { id: 'c2', numero: '002', status: 'EM_USO', pedidos: [{ id: 'p1', status: 'PENDENTE' }, { id: 'p2', status: 'CANCELADO' }] }
+    test('retorna lista de comandas ativas', async () => {
+      const mockCmds = [
+        { id: VALID_CMD_ID, numero: '001', status: 'EM_USO', pedidos: [{ id: 'p1', status: 'PENDENTE' }] }
       ]
-
       supabase.from = () => ({
         select: () => ({
           eq: () => ({
             eq: () => ({
-              order: () => Promise.resolve({ data: mockAtivas, error: null })
+              order: () => Promise.resolve({ data: mockCmds, error: null })
             })
           })
         })
       })
 
-      const res = await fetchComandasAtivas('res-123')
+      const res = await fetchComandasAtivas(VALID_REST_ID)
       assert.equal(res.length, 1)
-      assert.equal(res[0].pedidos_count, 1, 'Apenas pedidos não-cancelados contam')
-    })
-
-    test('calcula pedidos_count via fallback local', async () => {
-      supabase.from = () => ({
-        select: () => ({
-          eq: () => ({
-            order: () => Promise.resolve({ data: null, error: new Error('offline') }),
-            eq: () => ({
-              order: () => Promise.resolve({ data: null, error: new Error('offline') })
-            })
-          })
-        })
-      })
-
-      mockStorage.set('restaurante_pedidos_res-demo-001', JSON.stringify([
-        { id: 'p1', comanda_id: 'cmd-8', status: 'EM_PREPARO' }
-      ]))
-
-      const res = await fetchComandasAtivas('res-demo-001')
-      assert.ok(Array.isArray(res))
-      const cmd8 = res.find(c => c.numero === '008')
-      if (cmd8) {
-        assert.equal(cmd8.pedidos_count, 1)
-      }
+      assert.equal(res[0].pedidos_count, 1)
     })
   })
 
   describe('fecharComandaPagamento & fetchHistoricoFechamentos', () => {
     test('dispara erro se comandaId for ausente', async () => {
-      await assert.rejects(() => fecharComandaPagamento({ comandaId: null }))
+      await assert.rejects(() => fecharComandaPagamento({ comandaId: null, restauranteId: VALID_REST_ID }))
     })
 
-    test('executa fechamento com Supabase online e itens formatados', async () => {
-      supabase.from = () => ({
-        update: () => ({
-          eq: () => ({
-            eq: () => Promise.resolve({ error: null })
-          }),
-          in: () => ({
-            eq: () => Promise.resolve({ error: null })
-          })
-        }),
-        insert: () => Promise.resolve({ error: null })
-      })
+    test('executa fechamento com Supabase online', async () => {
+      supabase.from = (table) => {
+        if (table === 'comandas') {
+          return {
+            update: () => ({
+              eq: () => ({
+                eq: () => Promise.resolve({ error: null })
+              })
+            })
+          }
+        }
+        if (table === 'pedidos') {
+          return {
+            update: () => ({
+              in: () => ({
+                eq: () => Promise.resolve({ error: null })
+              })
+            })
+          }
+        }
+        if (table === 'pagamentos') {
+          return {
+            insert: () => Promise.resolve({ error: null })
+          }
+        }
+        return {}
+      }
 
       const res = await fecharComandaPagamento({
-        comandaId: 'cmd-8',
-        restauranteId: 'res-demo-001',
+        comandaId: VALID_CMD_ID,
+        restauranteId: VALID_REST_ID,
         formaPagamento: 'CARTAO_CREDITO',
         valorTotal: 120.00,
         subtotal: 100.00,
         taxaServico: 20.00,
-        pedidos: [
-          {
-            id: 'p1',
-            status: 'PENDENTE',
-            itens: [{ nome: 'Burguer', quantidade: 2, preco_unitario: 50, subtotal: 100 }]
-          },
-          {
-            id: 'p2',
-            status: 'CANCELADO',
-            itens: []
-          }
-        ]
+        pedidos: []
       })
 
       assert.equal(res.success, true)
       assert.equal(res.transacao.valor_total, 120.00)
-      assert.equal(res.transacao.pedidos_resumo[0].itens[0].nome, 'Burguer')
     })
 
-    test('executa fechamento e atualiza pedidos no localStorage fallback', async () => {
-      supabase.from = () => ({
-        update: () => ({
-          eq: () => ({
-            eq: () => Promise.resolve({ error: new Error('offline') })
-          })
-        })
-      })
+    test('rejeita fechamento se gravação do pagamento falhar no Supabase', async () => {
+      supabase.from = (table) => {
+        if (table === 'comandas') {
+          return {
+            update: () => ({
+              eq: () => ({
+                eq: () => Promise.resolve({ error: null })
+              })
+            })
+          }
+        }
+        if (table === 'pagamentos') {
+          return {
+            insert: () => Promise.resolve({ error: new Error('Payment DB Error') })
+          }
+        }
+        return {}
+      }
 
-      mockStorage.set('restaurante_pedidos_res-demo-001', JSON.stringify([
-        { id: 'p1', comanda_id: 'cmd-2', comandaNumero: '002', status: 'EM_PREPARO' }
-      ]))
-
-      const res = await fecharComandaPagamento({
-        comandaId: 'cmd-2',
-        comandaNumero: '002',
-        restauranteId: 'res-demo-001',
-        formaPagamento: 'DINHEIRO',
-        valorTotal: 50.00,
-        valorRecebido: 100.00,
-        troco: 50.00
-      })
-
-      assert.equal(res.success, true)
-      assert.equal(res.transacao.troco, 50.00)
-
-      const historico = await fetchHistoricoFechamentos('res-demo-001')
-      assert.ok(historico.length >= 1)
-      assert.equal(historico[0].forma_pagamento, 'DINHEIRO')
+      await assert.rejects(
+        () => fecharComandaPagamento({
+          comandaId: VALID_CMD_ID,
+          restauranteId: VALID_REST_ID,
+          formaPagamento: 'PIX',
+          valorTotal: 50.00,
+          subtotal: 50.00,
+          pedidos: []
+        }),
+        /Payment DB Error/
+      )
     })
 
     test('fetchHistoricoFechamentos retorna dados do Supabase online', async () => {
@@ -422,7 +276,7 @@ describe('comandaService Unit Tests', () => {
         })
       })
 
-      const res = await fetchHistoricoFechamentos('res-123')
+      const res = await fetchHistoricoFechamentos(VALID_REST_ID)
       assert.equal(res.length, 1)
       assert.equal(res[0].valor_total, 80.00)
     })

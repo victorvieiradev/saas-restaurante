@@ -4,7 +4,7 @@ import OrderCardKDS from './OrderCardKDS'
 import { fetchPedidosKDS, subscribeToPedidosKDS, atualizarStatusPedido } from '../../services/pedidoService'
 import { playNewOrderSound, getSoundPreference, setSoundPreference, unlockAudio } from '../../lib/soundNotification'
 
-export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
+export default function KanbanKDS({ restauranteId }) {
   const [pedidos, setPedidos] = useState([])
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -27,6 +27,12 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
 
   // Função para carregar pedidos do KDS
   const loadKDSData = useCallback(async (showSpinner = false) => {
+    if (!restauranteId) {
+      setLoading(false)
+      setIsRefreshing(false)
+      return
+    }
+
     if (showSpinner) setIsRefreshing(true)
     try {
       const data = await fetchPedidosKDS(restauranteId)
@@ -80,17 +86,17 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
 
   // Efeito principal: carga inicial, polling secundário e inscrição WebSockets Realtime
   useEffect(() => {
+    if (!restauranteId) return
+
     loadKDSData()
 
     // 1. Inscrição em Tempo Real no Supabase
     const unsubscribe = subscribeToPedidosKDS(restauranteId, {
       onNewPedido: (novoPedido) => {
         setPedidos((prevPedidos) => {
-          // Previne duplicatas se o pedido já estiver no estado
           const jaExiste = prevPedidos.some((p) => p.id === novoPedido.id)
           if (jaExiste) return prevPedidos
 
-          // Se for novo pedido, toca notificação sonora
           playNewOrderSound()
           setLastUpdated(new Date())
           return [novoPedido, ...prevPedidos]
@@ -116,11 +122,11 @@ export default function KanbanKDS({ restauranteId = 'demo-restaurante-id' }) {
       loadKDSData(false)
     }, 10000)
 
-    // 3. Listener local para sincronização em tempo real (fallback / mesmo navegador)
+    // 3. Listener local para sincronização em tempo real
     const handleLocalSync = (e) => {
       const syncRestauranteId = e.detail?.restauranteId
       const novoPedido = e.detail?.pedido
-      if (!syncRestauranteId || syncRestauranteId === restauranteId || syncRestauranteId === 'demo-restaurante-id' || restauranteId === 'res-demo-001') {
+      if (syncRestauranteId === restauranteId) {
         if (novoPedido) {
           setPedidos((prev) => {
             const exists = prev.some(p => p.id === novoPedido.id)

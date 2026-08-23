@@ -41,17 +41,19 @@ export default function ModalRevisaoPedido({ restauranteId, comandaId, comandaNu
   const handleSendOrder = async () => {
     if (!cartItems || cartItems.length === 0 || isSubmitting) return
 
+    if (!restauranteId || !comandaId) {
+      setSubmitError('Comanda ou restaurante não identificados. Por favor, leia o QR Code novamente.')
+      return
+    }
+
     setIsSubmitting(true)
     setSubmitError(null)
 
-    const targetRestauranteId = restauranteId || 'demo-restaurante-id'
-    const targetComandaId = comandaId || 'cmd-demo-015'
-
     try {
       const result = await criarPedido({
-        restauranteId: targetRestauranteId,
-        comandaId: targetComandaId,
-        comandaNumero: comandaNumero,
+        restauranteId,
+        comandaId,
+        comandaNumero,
         cartItems,
         valorTotal: totalAmount,
         observacaoGeral

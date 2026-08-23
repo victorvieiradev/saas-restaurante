@@ -14,7 +14,7 @@ import ReciboComandaModal from '../components/caixa/ReciboComandaModal'
 
 export default function CaixaPOS() {
   const { restaurante } = useAuth()
-  const restauranteId = restaurante?.id || 'demo-restaurante-id'
+  const restauranteId = restaurante?.id
 
   const [termoBusca, setTermoBusca] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -41,6 +41,10 @@ export default function CaixaPOS() {
 
   // Carregar lista de comandas ativas em uso
   const carregarComandasAtivas = useCallback(async () => {
+    if (!restauranteId) {
+      setComandasAtivas([])
+      return
+    }
     setIsLoadingAtivas(true)
     try {
       const ativas = await fetchComandasAtivas(restauranteId)
@@ -53,8 +57,10 @@ export default function CaixaPOS() {
   }, [restauranteId])
 
   useEffect(() => {
-    carregarComandasAtivas()
-  }, [carregarComandasAtivas])
+    if (restauranteId) {
+      carregarComandasAtivas()
+    }
+  }, [carregarComandasAtivas, restauranteId])
 
   // Sincronização em Tempo Real (Invariante AD-3: WebSockets + Local Events)
   useEffect(() => {

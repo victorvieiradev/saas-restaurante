@@ -1,7 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { ROLES, getDefaultPathForRole, isRoleAllowed, getRoleBadgeInfo, normalizeRole } from '../src/utils/rbac.js'
-import { DEMO_USERS } from '../src/services/userService.js'
 
 describe('RBAC & Intelligent Routing Unit Tests', () => {
   describe('normalizeRole & Case Insensitivity', () => {
@@ -146,22 +145,7 @@ describe('RBAC & Intelligent Routing Unit Tests', () => {
     })
   })
 
-  describe('Perfis Demo e Integridade Multi-Tenant', () => {
-    test('Perfis de demonstração estão mapeados para os papéis corretos', () => {
-      const admin = DEMO_USERS.find(u => u.email === 'admin@restaurante.com')
-      const cozinha = DEMO_USERS.find(u => u.email === 'cozinha@restaurante.com')
-      const caixa = DEMO_USERS.find(u => u.email === 'caixa@restaurante.com')
-
-      assert.ok(admin, 'Admin demo existe')
-      assert.equal(admin.role, 'GESTOR')
-
-      assert.ok(cozinha, 'Cozinha demo existe')
-      assert.equal(cozinha.role, 'COZINHA')
-
-      assert.ok(caixa, 'Caixa demo existe')
-      assert.equal(caixa.role, 'CAIXA')
-    })
-
+  describe('Badges Visuais por Papel RBAC', () => {
     test('Badges visuais são gerados corretamente por papel', () => {
       const gestorBadge = getRoleBadgeInfo(ROLES.GESTOR)
       assert.equal(gestorBadge.color, 'blue')
@@ -185,3 +169,4 @@ describe('RBAC & Intelligent Routing Unit Tests', () => {
     })
   })
 })
+

@@ -13,12 +13,15 @@ export default function CardapioCliente({ restauranteId }) {
 
   useEffect(() => {
     async function loadMenuData() {
+      if (!restauranteId) {
+        setLoading(false)
+        return
+      }
       setLoading(true)
       try {
-        const targetRestId = restauranteId || 'demo-restaurante-id'
         const [catData, prodData] = await Promise.all([
-          fetchCategorias(targetRestId),
-          fetchProdutos(targetRestId)
+          fetchCategorias(restauranteId),
+          fetchProdutos(restauranteId)
         ])
         
         // Filtrar apenas categorias ativas
