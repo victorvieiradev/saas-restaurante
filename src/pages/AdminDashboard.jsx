@@ -6,9 +6,12 @@ import ProductManager from '../components/admin/ProductManager'
 import ComandaManager from '../components/admin/ComandaManager'
 import TeamManager from '../components/admin/TeamManager'
 import AdminAssinaturaTab from '../components/admin/AdminAssinaturaTab'
+import OrderUsageBar from '../components/admin/OrderUsageBar'
+import UpgradePlanModal from '../components/admin/UpgradePlanModal'
 import { fetchCategorias, fetchProdutos } from '../services/menuService'
 import { fetchComandas } from '../services/comandaService'
 import { fetchUsuariosEquipe } from '../services/userService'
+import { fetchSubscriptionStatus } from '../services/subscriptionService'
 import {
   Building2,
   LogOut,
@@ -20,6 +23,8 @@ import {
   LayoutDashboard,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  TrendingUp,
   Layers,
   Users,
   Crown,
@@ -34,6 +39,10 @@ export default function AdminDashboard({ defaultTab }) {
   const location = useLocation()
   const initialTab = defaultTab || (location.pathname === '/admin/assinatura' ? 'subscription' : (location.state?.tab || 'overview'))
   const [activeTab, setActiveTab] = useState(initialTab) // 'overview', 'categories', 'products', 'comandas', 'team', 'subscription'
+  const [subStatus, setSubStatus] = useState(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [dismissed80Banner, setDismissed80Banner] = useState(false)
+  const [dismissed100Banner, setDismissed100Banner] = useState(false)
 
   useEffect(() => {
     if (defaultTab) {
@@ -63,6 +72,16 @@ export default function AdminDashboard({ defaultTab }) {
     teamCount: 0
   })
 
+  const loadSubStatus = async () => {
+    if (!restaurante?.id) return
+    try {
+      const res = await fetchSubscriptionStatus(restaurante.id)
+      setSubStatus(res)
+    } catch (e) {
+      console.warn('Erro ao carregar status da assinatura:', e)
+    }
+  }
+
   const loadStats = async () => {
     if (!restaurante?.id) return
     try {
@@ -86,10 +105,97 @@ export default function AdminDashboard({ defaultTab }) {
 
   useEffect(() => {
     loadStats()
+    loadSubStatus()
   }, [restaurante?.id])
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+      {/* Banner 100% de Limite de Pedidos (Fair Use Policy - AC3) */}
+      {subStatus?.alerta_100 && !dismissed100Banner && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-rose-950/80 via-slate-900 to-slate-900 border border-rose-500/40 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-rose-500/10">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white font-extrabold text-[11px] uppercase tracking-wider">
+                  Limite de Pedidos Atingido (100%)
+                </span>
+                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Fair Use Policy: Atendimento & KDS operando normalmente
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-white mt-1">
+                🚀 Seu restaurante atingiu o limite de {subStatus.limite_pedidos_mes} pedidos deste mês!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mt-0.5">
+                Para continuar com relatórios detalhados, indicadores e recursos avançados, realize o upgrade para o próximo nível.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end md:self-center flex-shrink-0">
+            <button
+              onClick={() => setShowUpgradeModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold transition-all shadow-lg shadow-orange-500/20 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Fazer Upgrade de Plano</span>
+            </button>
+            <button
+              onClick={() => setDismissed100Banner(true)}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Fechar aviso"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Banner 80% de Consumo de Pedidos (Warning - AC2) */}
+      {subStatus?.alerta_80 && !dismissed80Banner && (
+        <div className="p-6 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900 to-slate-900 border border-amber-500/40 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/10">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-extrabold text-[11px] uppercase tracking-wider">
+                  Atenção ao Limite de Pedidos ({subStatus.percentual_consumido}%)
+                </span>
+                <span className="text-xs text-slate-400">Plano {subStatus.plano_info?.nome || 'Atual'}</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-white mt-1">
+                ⚠️ Você utilizou {subStatus.percentual_consumido}% do volume de pedidos do seu plano
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mt-0.5">
+                Restam apenas {subStatus.pedidos_restantes} pedidos neste ciclo. Faça o upgrade para garantir atendimento contínuo quando seu movimento aumentar.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end md:self-center flex-shrink-0">
+            <button
+              onClick={() => setShowUpgradeModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-all shadow-lg shadow-orange-500/20 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Fazer Upgrade de Plano</span>
+            </button>
+            <button
+              onClick={() => setDismissed80Banner(true)}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Fechar aviso"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Banner de Boas-Vindas & Status de Trial de 14 Dias (AC5) */}
       {welcomeBanner && (
         <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-slate-900 to-slate-900 border border-emerald-500/40 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
@@ -238,6 +344,14 @@ export default function AdminDashboard({ defaultTab }) {
       {/* Conteúdo da Aba Ativa */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Widget de Consumo de Pedidos no Painel Gestor (AC1) */}
+          {subStatus && (
+            <OrderUsageBar
+              subStatus={subStatus}
+              onUpgradeClick={() => setShowUpgradeModal(true)}
+            />
+          )}
+
           {/* Cards de Métricas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div
@@ -427,6 +541,18 @@ export default function AdminDashboard({ defaultTab }) {
       {activeTab === 'subscription' && (
         <AdminAssinaturaTab restauranteId={restaurante?.id} />
       )}
+
+      {/* Modal de Upgrade de Plano com 1 Clique (AC4) */}
+      <UpgradePlanModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        restauranteId={restaurante?.id}
+        subStatus={subStatus}
+        onSuccess={() => {
+          loadSubStatus()
+          loadStats()
+        }}
+      />
     </div>
   )
 }

@@ -34,6 +34,8 @@ import {
   validateDocument,
   maskDocument
 } from '../../utils/validators'
+import OrderUsageBar from './OrderUsageBar'
+import UpgradePlanModal from './UpgradePlanModal'
 
 export default function AdminAssinaturaTab({ restauranteId }) {
   const [loading, setLoading] = useState(true)
@@ -44,6 +46,7 @@ export default function AdminAssinaturaTab({ restauranteId }) {
   const toastTimeoutRef = useRef(null)
 
   // Modais
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [cancelMotivo, setCancelMotivo] = useState('')
@@ -305,6 +308,14 @@ export default function AdminAssinaturaTab({ restauranteId }) {
         </button>
       </div>
 
+      {/* Widget de Consumo de Pedidos no Painel (AC1) */}
+      {subStatus && (
+        <OrderUsageBar
+          subStatus={subStatus}
+          onUpgradeClick={() => setShowUpgradeModal(true)}
+        />
+      )}
+
       {/* Grid de Cards Principais: Status / Plano / Cartão */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Card 1: Status & Contagem Regressiva do Trial / Assinatura (AC2) */}
@@ -357,7 +368,18 @@ export default function AdminAssinaturaTab({ restauranteId }) {
           {/* Destaque do Plano */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-2 border-b border-slate-800 pb-6">
             <div>
-              <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Plano Contratado</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Plano Contratado</span>
+                {planoKey !== 'enterprise' && (
+                  <button
+                    onClick={() => setShowUpgradeModal(true)}
+                    className="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Fazer Upgrade de Plano</span>
+                  </button>
+                )}
+              </div>
               <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-1 flex items-center gap-2">
                 <span>Plano {planoInfo.nome}</span>
                 <span className="text-xs font-normal px-2 py-0.5 rounded-lg bg-orange-500/10 text-orange-400 border border-orange-500/20">
@@ -1027,6 +1049,18 @@ export default function AdminAssinaturaTab({ restauranteId }) {
           </div>
         </div>
       )}
+
+      {/* Modal 5: Upgrade de Plano com 1 Clique (AC4) */}
+      <UpgradePlanModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        restauranteId={restauranteId}
+        subStatus={subStatus}
+        onSuccess={async () => {
+          showToast('🎉 Plano atualizado com sucesso! Novos limites ativos.', 'success')
+          await loadData(true)
+        }}
+      />
     </div>
   )
 }

@@ -145,7 +145,8 @@ export async function fetchSubscriptionStatus(restauranteId) {
   const limitePedidos = restaurante.limite_pedidos_mes !== undefined && restaurante.limite_pedidos_mes !== null
     ? Number(restaurante.limite_pedidos_mes)
     : (planoInfo.limite_pedidos ?? null)
-  const pedidosConsumidos = Number(restaurante.pedidos_consumidos_mes || 0)
+  const rawConsumed = Number(restaurante.pedidos_consumidos_mes)
+  const pedidosConsumidos = Number.isFinite(rawConsumed) ? Math.max(0, rawConsumed) : 0
 
   const percentualConsumido = limitePedidos !== null && limitePedidos > 0
     ? Math.min(100, Math.round((pedidosConsumidos / limitePedidos) * 100))
@@ -173,6 +174,34 @@ export async function fetchSubscriptionStatus(restauranteId) {
   const statusNormalizado = (restaurante.status_assinatura || 'trialing').toLowerCase()
   const isBloqueado = statusNormalizado === 'canceled' || statusNormalizado === 'past_due' || (statusNormalizado === 'trialing' && diasRestantesTrial <= 0 && !restaurante.cartao_ultimos_digitos)
 
+  // Alertas inteligentes de limites de pedidos (Story 7.5 AC2, AC3)
+  const alerta100 = Boolean(limitePedidos !== null && limitePedidos > 0 && pedidosConsumidos >= limitePedidos)
+  const alerta80 = Boolean(limitePedidos !== null && limitePedidos > 0 && percentualConsumido >= 80 && !alerta100)
+
+  // Cálculo da data de renovação do ciclo mensal (com proteção contra overflow de dias)
+  let dataRenovacaoCiclo = null
+  if (restaurante.data_inicio_ciclo) {
+    try {
+      const d = new Date(restaurante.data_inicio_ciclo)
+      if (!isNaN(d.getTime())) {
+        const targetDay = d.getDate()
+        const renovacao = new Date(d)
+        const agora = new Date()
+        while (renovacao <= agora) {
+          renovacao.setMonth(renovacao.getMonth() + 1)
+          if (renovacao.getDate() !== targetDay && renovacao.getDate() < 4) {
+            renovacao.setDate(0)
+          }
+        }
+        dataRenovacaoCiclo = renovacao.toISOString()
+      }
+    } catch {
+      dataRenovacaoCiclo = null
+    }
+  } else if (restaurante.data_fim_trial) {
+    dataRenovacaoCiclo = restaurante.data_fim_trial
+  }
+
   return {
     restaurante_id: restaurante.id,
     plano: planoKey,
@@ -183,10 +212,13 @@ export async function fetchSubscriptionStatus(restauranteId) {
     pedidos_restantes: pedidosRestantes,
     percentual_consumido: percentualConsumido,
     limite_excedido: limiteExcedido,
+    alerta_80: alerta80,
+    alerta_100: alerta100,
     is_trial: isTrial,
     dias_restantes_trial: diasRestantesTrial,
     data_inicio_ciclo: restaurante.data_inicio_ciclo,
     data_fim_trial: restaurante.data_fim_trial,
+    data_renovacao_ciclo: dataRenovacaoCiclo,
     cartao_ultimos_digitos: restaurante.cartao_ultimos_digitos,
     cartao_bandeira: restaurante.cartao_bandeira,
     is_bloqueado: isBloqueado
@@ -483,6 +515,77 @@ export async function reactivateSubscription(restauranteId, options = {}) {
       status: 'active',
       plano: planoKey,
       message: 'Assinatura reativada com sucesso!'
+    },
+    error: null,
+    isMock: true
+  }
+}
+
+/**
+ * Realiza o upgrade imediato de plano do restaurante (Story 7.5 AC4)
+ * @param {string} restauranteId - UUID do restaurante
+ * @param {string} newPlan - Identificador do novo plano ('pro', 'scale', 'enterprise')
+ * @param {Object} [options] - { ciclo, imediato }
+ * @returns {Promise<{ data: Object|null, error: Error|null, isMock?: boolean }>}
+ */
+export async function upgradeSubscription(restauranteId, newPlan, options = {}) {
+  if (!restauranteId || !isValidUUID(restauranteId)) {
+    return { data: null, error: new Error('ID do restaurante inválido.') }
+  }
+
+  if (!newPlan || typeof newPlan !== 'string') {
+    return { data: null, error: new Error('Novo plano não informado.') }
+  }
+
+  const planoKey = newPlan.toLowerCase().trim()
+  const planoConfig = PLANS_CONFIG[planoKey]
+
+  if (!planoConfig) {
+    return { data: null, error: new Error(`Plano "${newPlan}" não é válido. Opções: starter, pro, scale, enterprise.`) }
+  }
+
+  // Tenta invocar Edge Function se disponível
+  try {
+    if (supabase && supabase.functions && typeof supabase.functions.invoke === 'function') {
+      const { data, error } = await supabase.functions.invoke('upgrade-subscription', {
+        body: {
+          restauranteId,
+          plano: planoKey,
+          ciclo: options?.ciclo || 'MONTHLY'
+        }
+      })
+
+      if (!error && data && data.success) {
+        return { data, error: null, isMock: false }
+      }
+
+      if (!error && data && data.success === false) {
+        return { data: null, error: new Error(data.message || 'Falha ao processar upgrade de plano no gateway de pagamento.') }
+      }
+    }
+  } catch (err) {
+    console.warn('Exceção ao invocar Edge Function upgrade-subscription:', err)
+  }
+
+  // Fallback Mock Local / Atualização direta no Supabase
+  const payload = {
+    plano: planoKey,
+    limite_pedidos_mes: planoConfig.limite_pedidos,
+    status_assinatura: 'active'
+  }
+
+  const res = await updateRestaurantSubscription(restauranteId, payload)
+  if (res.error) {
+    return { data: null, error: res.error }
+  }
+
+  return {
+    data: {
+      success: true,
+      restauranteId,
+      plano: planoKey,
+      limite_pedidos_mes: planoConfig.limite_pedidos,
+      message: `Plano atualizado com sucesso para ${planoConfig.nome}!`
     },
     error: null,
     isMock: true
